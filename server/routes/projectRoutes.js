@@ -1,15 +1,23 @@
 import express from 'express';
-import { addMember, createProject, updateProject } from '../controllers/projectController.js';
+import { 
+  addProjectMember, 
+  createProject, 
+  updateProject,
+  getProject 
+} from '../controllers/projectController.js';
 
 const projectRouter = express.Router();
 
 // ✅ Create a project
 projectRouter.post('/', createProject);
 
-// ✅ Update a project (use PUT)
-projectRouter.put('/:id', updateProject);
+// ✅ Get project by ID
+projectRouter.get('/:projectId', getProject);
+
+// ✅ Update a project
+projectRouter.put('/:projectId', updateProject);
 
 // ✅ Add member to project
-projectRouter.post('/:projectId/members', addMember);
+projectRouter.post('/:projectId/members', addProjectMember);
 
 export default projectRouter;
