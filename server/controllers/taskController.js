@@ -112,18 +112,38 @@ export const createTask = async (req, res) => {
             });
         });
 
-        // Send email notifications to all assignees
+        // ✅ ENHANCED: Send email notifications to all assignees with better error handling
         if (result.assignees && result.assignees.length > 0) {
-            for (const assignee of result.assignees) {
-                await inngest.send({
-                    name: "app/task.assigned",
-                    data: {
-                        taskId: result.id,
-                        assigneeId: assignee.userId,
-                        origin
-                    }
+            console.log(`📧 Sending task assignment emails to ${result.assignees.length} assignees`);
+            
+            const emailPromises = result.assignees.map(async (assignee) => {
+                try {
+                    await inngest.send({
+                        name: "app/task.assigned",
+                        data: {
+                            taskId: result.id,
+                            assigneeId: assignee.userId,
+                            origin
+                        }
+                    });
+                    console.log(`✅ Task assignment event queued for: ${assignee.user.email}`);
+                    return { success: true, email: assignee.user.email };
+                } catch (emailError) {
+                    console.error(`❌ Failed to queue email for ${assignee.user.email}:`, emailError);
+                    return { success: false, email: assignee.user.email, error: emailError };
+                }
+            });
+
+            // Fire and forget - don't block response
+            Promise.all(emailPromises)
+                .then(results => {
+                    const successful = results.filter(r => r.success).length;
+                    const failed = results.filter(r => !r.success).length;
+                    console.log(`📊 Email sending summary: ${successful} successful, ${failed} failed`);
+                })
+                .catch(error => {
+                    console.error('Unexpected error in email batch:', error);
                 });
-            }
         }
 
         res.json({ task: result, message: "Task created successfully." });
@@ -132,7 +152,6 @@ export const createTask = async (req, res) => {
         res.status(500).json({ message: error.code || error.message });
     }
 };
-
 // Update task
 export const updateTask = async (req, res) => {
     try {
