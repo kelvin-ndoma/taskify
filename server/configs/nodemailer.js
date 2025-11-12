@@ -10,6 +10,8 @@ const transporter = nodemailer.createTransport({
     user: process.env.SENDER_USER,
     pass: process.env.SENDER_PASS,
   },
+  debug: true, // Enable debug output
+  logger: true, // Enable logging
 });
 
 // Verify connection configuration
@@ -33,26 +35,34 @@ const validateEmailConfig = () => {
     console.error('❌ Missing email environment variables:', missing);
     return false;
   }
+  
+  console.log('✅ Email environment variables are set');
+  console.log('📧 Sender Email:', process.env.SENDER_EMAIL);
+  console.log('👤 Sender User:', process.env.SENDER_USER);
+  console.log('🔑 Sender Pass:', process.env.SENDER_PASS ? '***' : 'MISSING');
+  
   return true;
 };
 
 const sendEmail = async ({ to, subject, body }) => {
+  console.log(`\n📧 ========== ATTEMPTING TO SEND EMAIL ==========`);
+  console.log(`📧 To: ${to}`);
+  console.log(`📧 Subject: ${subject}`);
+  
   // Check configuration first
   if (!validateEmailConfig()) {
-    console.error('Email configuration incomplete');
+    console.error('❌ Email configuration incomplete');
     return null;
   }
 
   // Verify transporter
   const isTransporterReady = await verifyTransporter();
   if (!isTransporterReady) {
-    console.error('SMTP transporter not ready');
+    console.error('❌ SMTP transporter not ready');
     return null;
   }
 
   try {
-    console.log(`📧 Attempting to send email to: ${to}`);
-    
     const mailOptions = {
       from: process.env.SENDER_EMAIL,
       to,
@@ -60,15 +70,27 @@ const sendEmail = async ({ to, subject, body }) => {
       html: body,
     };
 
+    console.log('📧 Sending email with options:', {
+      from: mailOptions.from,
+      to: mailOptions.to,
+      subject: mailOptions.subject
+    });
+
     const response = await transporter.sendMail(mailOptions);
     
-    console.log('✅ Email sent successfully:', response.messageId);
-    console.log('✅ Email accepted by:', response.accepted);
-    console.log('❌ Email rejected by:', response.rejected);
+    console.log('✅ Email sent successfully!');
+    console.log('✅ Message ID:', response.messageId);
+    console.log('✅ Response:', response.response);
     
     return response;
   } catch (error) {
     console.error('❌ Email sending failed:', error);
+    console.error('❌ Error details:', {
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode
+    });
     return null;
   }
 };

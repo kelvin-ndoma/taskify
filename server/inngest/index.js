@@ -251,18 +251,32 @@ const syncWorkspaceMemberCreation = inngest.createFunction(
     const { data } = event;
 
     try {
-      let user = await prisma.user.findUnique({ where: { id: data.user_id } });
+      console.log(`👥 Adding user to workspace: ${data.user_id} to ${data.organization_id}`);
+
+      // First, try to get the user from Clerk's data or find existing user
+      let user = await prisma.user.findUnique({ 
+        where: { id: data.user_id } 
+      });
 
       if (!user) {
+        console.log(`ℹ️ User ${data.user_id} not found in database, creating from Clerk data`);
+        
+        // Create user with available data from the invitation
         user = await prisma.user.create({
           data: {
             id: data.user_id,
-            name: "User",
-            email: `${data.user_id}@temp.com`,
+            name: data.public_user_data?.first_name && data.public_user_data?.last_name 
+              ? `${data.public_user_data.first_name} ${data.public_user_data.last_name}`.trim()
+              : "User",
+            email: data.public_user_data?.email_addresses?.[0]?.email_address || `${data.user_id}@temp.com`,
           },
         });
+        console.log(`✅ Created user from invitation: ${user.name} (${user.email})`);
+      } else {
+        console.log(`✅ Found existing user: ${user.name} (${user.email})`);
       }
 
+      // Add user to workspace
       await prisma.workspaceMember.create({
         data: {
           userId: data.user_id,
@@ -271,11 +285,46 @@ const syncWorkspaceMemberCreation = inngest.createFunction(
         },
       });
 
-      console.log(
-        `✅ Added ${data.user_id} to workspace ${data.organization_id}`
-      );
+      console.log(`✅ Added ${user.name} to workspace ${data.organization_id} as ${data.role}`);
+
     } catch (error) {
       console.error("❌ Error adding workspace member:", error);
+    }
+  }
+);
+
+// Sync user data when they accept workspace invitations
+const syncUserFromInvitation = inngest.createFunction(
+  { id: "sync-user-from-invitation" },
+  { event: "clerk/organizationInvitation.accepted" },
+  async ({ event }) => {
+    const { data } = event;
+
+    try {
+      console.log(`🔄 Syncing user data for: ${data.user_id}`);
+
+      // Update user with available data from the invitation
+      const user = await prisma.user.upsert({
+        where: { id: data.user_id },
+        update: {
+          name: data.public_user_data?.first_name && data.public_user_data?.last_name 
+            ? `${data.public_user_data.first_name} ${data.public_user_data.last_name}`.trim()
+            : undefined,
+          email: data.public_user_data?.email_addresses?.[0]?.email_address || undefined,
+        },
+        create: {
+          id: data.user_id,
+          name: data.public_user_data?.first_name && data.public_user_data?.last_name 
+            ? `${data.public_user_data.first_name} ${data.public_user_data.last_name}`.trim()
+            : "User",
+          email: data.public_user_data?.email_addresses?.[0]?.email_address || `${data.user_id}@temp.com`,
+        },
+      });
+
+      console.log(`✅ User data synced: ${user.name} (${user.email})`);
+
+    } catch (error) {
+      console.error("❌ Error syncing user data from invitation:", error);
     }
   }
 );
@@ -284,9 +333,13 @@ const syncWorkspaceMemberCreation = inngest.createFunction(
    🔹 INNGEST FUNCTION TO SEND EMAIL ON TASK CREATION
 ========================================================= */
 
-// In your inngest functions file
+// Immediate assignment email (no sleep to prevent timeout)
 const sendTaskAssignmentEmail = inngest.createFunction(
-  { id: "send-task-assignment-mail" },
+  { 
+    id: "send-task-assignment-mail",
+    // 🛠️ FIX: Add explicit timeout
+    timeout: "5m"
+  },
   { event: "app/task.assigned" },
   async ({ event, step }) => {
     const { taskId, assigneeId, origin } = event.data;
@@ -294,7 +347,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
     console.log(`🎯 Processing task assignment: ${taskId} for user: ${assigneeId}`);
 
     try {
-      // Get task with assignee details - FIXED QUERY
+      // Get task with assignee details
       const task = await prisma.task.findUnique({
         where: { id: taskId },
         include: { 
@@ -322,7 +375,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
         return;
       }
 
-      // Find the specific assignee - FIXED LOGIC
+      // Find the specific assignee
       const assignee = task.assignees.find(a => a.user.id === assigneeId);
       
       if (!assignee) {
@@ -337,7 +390,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
 
       console.log(`📧 Sending email to: ${assignee.user.email}`);
 
-      // Send initial assignment email
+      // Send initial assignment email only (remove the sleep for now)
       await sendEmail({
         to: assignee.user.email,
         subject: `New Task Assignment in ${task.project.name}`,
@@ -390,89 +443,132 @@ const sendTaskAssignmentEmail = inngest.createFunction(
 
       console.log(`✅ Task assignment email sent to: ${assignee.user.email}`);
 
-      // Schedule reminder for due date
-      await step.sleepUntil('wait-for-the-due-date', new Date(task.due_date));
-
-      await step.run('check-if-task-is-completed', async () => {
-        const updatedTask = await prisma.task.findUnique({
-          where: { id: taskId },
-          include: { 
-            assignees: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true
-                  }
-                }
-              }
-            }, 
-            project: true 
-          }
+      // 🛠️ FIX: Schedule reminder as a separate event instead of using sleep
+      if (task.due_date) {
+        const reminderDate = new Date(task.due_date);
+        
+        // Schedule reminder for the due date
+        await inngest.send({
+          name: "app/task.reminder",
+          data: {
+            taskId,
+            assigneeId,
+            origin,
+            reminderType: "due_date"
+          },
+          ts: reminderDate.getTime()
         });
         
-        if (!updatedTask) return;
-
-        // Find the same assignee in the updated task
-        const updatedAssignee = updatedTask.assignees.find(a => a.user.id === assigneeId);
-        
-        if (!updatedAssignee) return;
-
-        // Send reminder only if task is not completed
-        if (updatedTask.status !== "DONE") {
-          await step.run("send-task-reminder-mail", async () => {
-            await sendEmail({
-              to: updatedAssignee.user.email,
-              subject: `Reminder: Task Due Soon in ${updatedTask.project.name}`,
-              body: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                  <h2 style="color: #333; margin-bottom: 20px;">Hi ${updatedAssignee.user.name}, 👋</h2>
-
-                  <p style="font-size: 16px; color: #666; margin-bottom: 20px;">
-                    You have a task due in <strong>${updatedTask.project.name}</strong>:
-                  </p>
-                  
-                  <div style="border: 1px solid #ddd; padding: 16px; border-radius: 6px; margin-bottom: 30px; background: #f8f9fa;">
-                    <h3 style="color: #007bff; margin: 0 0 10px 0;">${updatedTask.title}</h3>
-                    
-                    ${updatedTask.description ? `
-                    <p style="margin: 10px 0;">
-                      <strong>Description:</strong> ${updatedTask.description}
-                    </p>
-                    ` : ''}
-                    
-                    <p style="margin: 8px 0;">
-                      <strong>Due Date:</strong> ${new Date(updatedTask.due_date).toLocaleDateString()}
-                    </p>
-                    <p style="margin: 8px 0;">
-                      <strong>Status:</strong> ${updatedTask.status.toLowerCase().replace('_', ' ')}
-                    </p>
-                    <p style="margin: 8px 0;">
-                      <strong>Priority:</strong> ${updatedTask.priority.toLowerCase()}
-                    </p>
-                  </div>
-                  
-                  <div style="text-align: center;">
-                    <a href="${origin}/projectsDetail?id=${updatedTask.project.id}&tab=tasks&taskId=${updatedTask.id}" 
-                       style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: white; text-decoration: none; font-weight: bold; display: inline-block;">
-                      View Task in App
-                    </a>
-                  </div>
-
-                  <p style="margin-top: 25px; font-size: 14px; color: #6c757d;">
-                    Please make sure to review and complete it before the due date.
-                  </p>
-                </div>
-              `
-            });
-            console.log(`✅ Task reminder email sent to: ${updatedAssignee.user.email}`);
-          });
-        }
-      });
+        console.log(`✅ Scheduled reminder for: ${reminderDate}`);
+      }
 
     } catch (error) {
       console.error("❌ Error in task assignment email function:", error);
+    }
+  }
+);
+
+/* =========================================================
+   🔹 SEPARATE FUNCTION FOR TASK REMINDERS
+========================================================= */
+
+// Separate function for reminders (won't cause timeout)
+const sendTaskReminder = inngest.createFunction(
+  { 
+    id: "send-task-reminder",
+    timeout: "5m"
+  },
+  { event: "app/task.reminder" },
+  async ({ event, step }) => {
+    const { taskId, assigneeId, origin, reminderType } = event.data;
+
+    console.log(`🔔 Processing task reminder: ${taskId} for user: ${assigneeId}`);
+
+    try {
+      // Get current task status
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        include: { 
+          assignees: {
+            include: {
+              user: {
+                select: { 
+                  id: true, 
+                  name: true, 
+                  email: true 
+                }
+              }
+            }
+          }, 
+          project: true 
+        }
+      });
+
+      if (!task) {
+        console.error(`❌ Task not found for reminder: ${taskId}`);
+        return;
+      }
+      
+      const assignee = task.assignees.find(a => a.user.id === assigneeId);
+      if (!assignee || !assignee.user.email) {
+        console.error(`❌ Assignee not found for reminder: ${assigneeId}`);
+        return;
+      }
+
+      console.log(`📧 Sending reminder to: ${assignee.user.email}`);
+
+      // Only send reminder if task is not completed
+      if (task.status !== "DONE") {
+        await sendEmail({
+          to: assignee.user.email,
+          subject: `Reminder: Task Due in ${task.project.name}`,
+          body: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #333; margin-bottom: 20px;">Hi ${assignee.user.name}, 👋</h2>
+
+              <p style="font-size: 16px; color: #666; margin-bottom: 20px;">
+                You have a task due in <strong>${task.project.name}</strong>:
+              </p>
+              
+              <div style="border: 1px solid #ddd; padding: 16px; border-radius: 6px; margin-bottom: 30px; background: #f8f9fa;">
+                <h3 style="color: #007bff; margin: 0 0 10px 0;">${task.title}</h3>
+                
+                ${task.description ? `
+                <p style="margin: 10px 0;">
+                  <strong>Description:</strong> ${task.description}
+                </p>
+                ` : ''}
+                
+                <p style="margin: 8px 0;">
+                  <strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}
+                </p>
+                <p style="margin: 8px 0;">
+                  <strong>Status:</strong> ${task.status.toLowerCase().replace('_', ' ')}
+                </p>
+                <p style="margin: 8px 0;">
+                  <strong>Priority:</strong> ${task.priority.toLowerCase()}
+                </p>
+              </div>
+              
+              <div style="text-align: center;">
+                <a href="${origin}/projectsDetail?id=${task.project.id}&tab=tasks&taskId=${task.id}" 
+                   style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: white; text-decoration: none; font-weight: bold; display: inline-block;">
+                  View Task in App
+                </a>
+              </div>
+
+              <p style="margin-top: 25px; font-size: 14px; color: #6c757d;">
+                Please make sure to review and complete it before the due date.
+              </p>
+            </div>
+          `
+        });
+        console.log(`✅ Task reminder email sent to: ${assignee.user.email}`);
+      } else {
+        console.log(`ℹ️ Task is already completed, no reminder sent`);
+      }
+    } catch (error) {
+      console.error("❌ Error in task reminder function:", error);
     }
   }
 );
@@ -586,6 +682,8 @@ export const functions = [
   syncWorkspaceUpdation,
   syncWorkspaceDeletion,
   syncWorkspaceMemberCreation,
+  syncUserFromInvitation, // 🆕 ADD THE NEW USER SYNC FUNCTION
   sendTaskAssignmentEmail,
+  sendTaskReminder, // 🆕 ADD THE NEW REMINDER FUNCTION
   sendWorkspaceInvitationEmail,
 ];
