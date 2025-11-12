@@ -1,48 +1,76 @@
+// configs/nodemailer.js
 import nodemailer from 'nodemailer';
 
-// Create a test account or replace with real credentials.
+// Create transporter
 const transporter = nodemailer.createTransport({
-    host: "smtp-relay.brevo.com",
-    port: 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-        user: process.env.SENDER_USER,
-        pass: process.env.SENDER_PASS,
-    },
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.SENDER_USER,
+    pass: process.env.SENDER_PASS,
+  },
 });
 
+// Verify connection configuration
+const verifyTransporter = async () => {
+  try {
+    await transporter.verify();
+    console.log('✅ SMTP transporter is ready');
+    return true;
+  } catch (error) {
+    console.error('❌ SMTP transporter verification failed:', error);
+    return false;
+  }
+};
+
+// Validate environment variables
+const validateEmailConfig = () => {
+  const required = ['SENDER_USER', 'SENDER_PASS', 'SENDER_EMAIL'];
+  const missing = required.filter(key => !process.env[key]);
+  
+  if (missing.length > 0) {
+    console.error('❌ Missing email environment variables:', missing);
+    return false;
+  }
+  return true;
+};
+
 const sendEmail = async ({ to, subject, body }) => {
-    try {
-        console.log(`📧 Attempting to send email to: ${to}`);
-        console.log(`🔧 Using SMTP: smtp-relay.brevo.com`);
-        console.log(`🔧 Sender user: ${process.env.SENDER_USER ? 'Set' : 'Not set'}`);
-        
-        // Validate required environment variables
-        if (!process.env.SENDER_USER || !process.env.SENDER_PASS || !process.env.SENDER_EMAIL) {
-            throw new Error('Missing required email environment variables');
-        }
+  // Check configuration first
+  if (!validateEmailConfig()) {
+    console.error('Email configuration incomplete');
+    return null;
+  }
 
-        const response = await transporter.sendMail({
-            from: process.env.SENDER_EMAIL,
-            to,
-            subject,
-            html: body,
-        });
+  // Verify transporter
+  const isTransporterReady = await verifyTransporter();
+  if (!isTransporterReady) {
+    console.error('SMTP transporter not ready');
+    return null;
+  }
 
-        console.log(`✅ Email sent successfully! Message ID: ${response.messageId}`);
-        console.log(`✅ Response: ${response.response}`);
-        
-        return response;
-    } catch (error) {
-        console.error('❌ Email sending failed:', error);
-        console.error('❌ Error details:', {
-            code: error.code,
-            command: error.command,
-            response: error.response,
-            responseCode: error.responseCode
-        });
-        throw error; // Re-throw to handle in calling function
-    }
+  try {
+    console.log(`📧 Attempting to send email to: ${to}`);
+    
+    const mailOptions = {
+      from: process.env.SENDER_EMAIL,
+      to,
+      subject,
+      html: body,
+    };
+
+    const response = await transporter.sendMail(mailOptions);
+    
+    console.log('✅ Email sent successfully:', response.messageId);
+    console.log('✅ Email accepted by:', response.accepted);
+    console.log('❌ Email rejected by:', response.rejected);
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Email sending failed:', error);
+    return null;
+  }
 };
 
 export default sendEmail;
