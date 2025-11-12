@@ -1,4 +1,89 @@
+// src/controllers/projectController.js
 import prisma from "../configs/prisma.js";
+
+// Get all projects for current workspace
+export const getProjects = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { workspaceId } = req.query; // Get from query params
+
+    if (!workspaceId) {
+      return res.status(400).json({ message: "Workspace ID is required." });
+    }
+
+    // Verify user has access to the workspace
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      include: {
+        members: {
+          where: { userId }
+        }
+      }
+    });
+
+    if (!workspace || workspace.members.length === 0) {
+      return res.status(403).json({ 
+        message: "You don't have access to this workspace." 
+      });
+    }
+
+    const projects = await prisma.project.findMany({
+      where: { workspaceId },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true
+          }
+        },
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            }
+          }
+        },
+        tasks: {
+          include: {
+            assignees: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.json({ projects });
+  } catch (error) {
+    console.error("Get projects error:", error);
+    res.status(500).json({ message: error.code || error.message });
+  }
+};
 
 // Create project
 export const createProject = async (req, res) => {
@@ -171,7 +256,7 @@ export const createProject = async (req, res) => {
         },
         tasks: {
           include: {
-            assignees: { // FIXED: changed from assignee to assignees
+            assignees: {
               include: {
                 user: {
                   select: {
@@ -204,6 +289,96 @@ export const createProject = async (req, res) => {
     });
   } catch (error) {
     console.error("Create project error:", error);
+    res.status(500).json({ message: error.code || error.message });
+  }
+};
+
+// Get project by ID
+export const getProject = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { projectId } = req.params;
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true
+          }
+        },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true
+          }
+        },
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            }
+          }
+        },
+        tasks: {
+          include: {
+            assignees: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    image: true
+                  }
+                }
+              }
+            },
+            comments: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true
+                  }
+                }
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      }
+    });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    // Check if user has access to this project
+    const hasAccess = project.members.some(member => member.userId === userId) ||
+                     project.workspace.members.some(member => member.userId === userId);
+
+    if (!hasAccess) {
+      return res.status(403).json({ 
+        message: "You don't have access to this project." 
+      });
+    }
+
+    res.json({ project });
+  } catch (error) {
+    console.error("Get project error:", error);
     res.status(500).json({ message: error.code || error.message });
   }
 };
@@ -291,7 +466,8 @@ export const updateProject = async (req, res) => {
           select: {
             id: true,
             name: true,
-            email: true
+            email: true,
+            image: true
           }
         },
         members: {
@@ -300,9 +476,17 @@ export const updateProject = async (req, res) => {
               select: {
                 id: true,
                 name: true,
-                email: true
+                email: true,
+                image: true
               }
             }
+          }
+        },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true
           }
         }
       }
@@ -314,6 +498,59 @@ export const updateProject = async (req, res) => {
     });
   } catch (error) {
     console.error("Update project error:", error);
+    res.status(500).json({ message: error.code || error.message });
+  }
+};
+
+// Delete project
+export const deleteProject = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { projectId } = req.params;
+
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required." });
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        workspace: {
+          include: {
+            members: true
+          }
+        }
+      }
+    });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    // Check permissions - workspace admin OR project team lead
+    const isWorkspaceAdmin = project.workspace.members.some(
+      (member) => member.userId === userId && member.role === "ADMIN"
+    );
+
+    const isProjectLead = project.team_lead === userId;
+
+    if (!isWorkspaceAdmin && !isProjectLead) {
+      return res.status(403).json({
+        message: "You don't have permission to delete this project.",
+      });
+    }
+
+    // Delete project (Prisma will cascade delete related records)
+    await prisma.project.delete({
+      where: { id: projectId }
+    });
+
+    res.json({ 
+      message: "Project deleted successfully.",
+      projectId 
+    });
+  } catch (error) {
+    console.error("Delete project error:", error);
     res.status(500).json({ message: error.code || error.message });
   }
 };
@@ -417,8 +654,97 @@ export const addProjectMember = async (req, res) => {
   }
 };
 
-// Get project by ID
-export const getProject = async (req, res) => {
+// Remove member from project
+export const removeProjectMember = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { projectId, memberId } = req.params;
+
+    if (!projectId || !memberId) {
+      return res.status(400).json({ 
+        message: "Project ID and Member ID are required." 
+      });
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        workspace: {
+          include: {
+            members: true
+          }
+        },
+        members: true
+      }
+    });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    // Check permissions - workspace admin OR project team lead
+    const isWorkspaceAdmin = project.workspace.members.some(
+      (member) => member.userId === userId && member.role === "ADMIN"
+    );
+
+    const isProjectLead = project.team_lead === userId;
+
+    if (!isWorkspaceAdmin && !isProjectLead) {
+      return res.status(403).json({ 
+        message: "Only the project lead or workspace admin can remove members." 
+      });
+    }
+
+    // Prevent removing project lead
+    if (memberId === project.team_lead) {
+      return res.status(400).json({ 
+        message: "Cannot remove project lead from project." 
+      });
+    }
+
+    // Find the member to remove
+    const memberToRemove = project.members.find(
+      (member) => member.userId === memberId
+    );
+
+    if (!memberToRemove) {
+      return res.status(404).json({ 
+        message: "Member not found in project." 
+      });
+    }
+
+    // Remove member from project
+    await prisma.projectMember.delete({
+      where: {
+        userId_projectId: {
+          userId: memberId,
+          projectId: projectId
+        }
+      }
+    });
+
+    // Also remove from any task assignments in this project
+    await prisma.taskAssignee.deleteMany({
+      where: {
+        userId: memberId,
+        task: {
+          projectId: projectId
+        }
+      }
+    });
+
+    res.json({ 
+      message: "Member removed from project successfully.",
+      removedMember: memberToRemove
+    });
+  } catch (error) {
+    console.error("Remove project member error:", error);
+    res.status(500).json({ message: error.code || error.message });
+  }
+};
+
+// Get project statistics
+export const getProjectStats = async (req, res) => {
   try {
     const { userId } = await req.auth();
     const { projectId } = req.params;
@@ -426,19 +752,112 @@ export const getProject = async (req, res) => {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
+        tasks: {
+          include: {
+            assignees: true
+          }
+        },
+        members: true,
+        workspace: {
+          include: {
+            members: {
+              where: { userId }
+            }
+          }
+        }
+      }
+    });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    // Check if user has access to this project
+    const hasAccess = project.members.some(member => member.userId === userId) ||
+                     project.workspace.members.length > 0;
+
+    if (!hasAccess) {
+      return res.status(403).json({ 
+        message: "You don't have access to this project." 
+      });
+    }
+
+    const stats = {
+      totalTasks: project.tasks.length,
+      completedTasks: project.tasks.filter(task => task.status === 'DONE').length,
+      inProgressTasks: project.tasks.filter(task => task.status === 'IN_PROGRESS').length,
+      todoTasks: project.tasks.filter(task => task.status === 'TODO').length,
+      totalMembers: project.members.length,
+      progress: project.progress,
+      overdueTasks: project.tasks.filter(task => 
+        task.due_date && new Date(task.due_date) < new Date() && task.status !== 'DONE'
+      ).length
+    };
+
+    res.json({ stats });
+  } catch (error) {
+    console.error("Get project stats error:", error);
+    res.status(500).json({ message: error.code || error.message });
+  }
+};
+
+// Update project progress
+export const updateProjectProgress = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { projectId } = req.params;
+    const { progress } = req.body;
+
+    if (!projectId || progress === undefined) {
+      return res.status(400).json({ 
+        message: "Project ID and progress are required." 
+      });
+    }
+
+    if (progress < 0 || progress > 100) {
+      return res.status(400).json({ 
+        message: "Progress must be between 0 and 100." 
+      });
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        workspace: {
+          include: {
+            members: true
+          }
+        }
+      }
+    });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    // Check permissions - workspace admin OR project team lead
+    const isWorkspaceAdmin = project.workspace.members.some(
+      (member) => member.userId === userId && member.role === "ADMIN"
+    );
+
+    const isProjectLead = project.team_lead === userId;
+
+    if (!isWorkspaceAdmin && !isProjectLead) {
+      return res.status(403).json({
+        message: "You don't have permission to update this project's progress.",
+      });
+    }
+
+    const updatedProject = await prisma.project.update({
+      where: { id: projectId },
+      data: { progress },
+      include: {
         owner: {
           select: {
             id: true,
             name: true,
             email: true,
             image: true
-          }
-        },
-        workspace: {
-          select: {
-            id: true,
-            name: true,
-            slug: true
           }
         },
         members: {
@@ -452,57 +871,16 @@ export const getProject = async (req, res) => {
               }
             }
           }
-        },
-        tasks: {
-          include: {
-            assignees: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    image: true
-                  }
-                }
-              }
-            },
-            comments: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    image: true
-                  }
-                }
-              }
-            }
-          },
-          orderBy: {
-            createdAt: 'desc'
-          }
         }
       }
     });
 
-    if (!project) {
-      return res.status(404).json({ message: "Project not found." });
-    }
-
-    // Check if user has access to this project
-    const hasAccess = project.members.some(member => member.userId === userId) ||
-                     project.workspace.members.some(member => member.userId === userId);
-
-    if (!hasAccess) {
-      return res.status(403).json({ 
-        message: "You don't have access to this project." 
-      });
-    }
-
-    res.json({ project });
+    res.json({ 
+      project: updatedProject, 
+      message: "Project progress updated successfully." 
+    });
   } catch (error) {
-    console.error("Get project error:", error);
+    console.error("Update project progress error:", error);
     res.status(500).json({ message: error.code || error.message });
   }
 };
