@@ -13,6 +13,7 @@ const DEFAULT_WORKSPACE_NAME = "The Burns Brothers";
 ========================================================= */
 
 // Handle Clerk user creation
+// Handle Clerk user creation - FIXED VERSION
 const syncUserCreation = inngest.createFunction(
   { id: "sync-user-from-clerk" },
   { event: "clerk/user.created" },
@@ -22,25 +23,47 @@ const syncUserCreation = inngest.createFunction(
     try {
       console.log(`👤 Creating user: ${data.id}`);
 
-      // Create or update the user
+      // Extract proper name from Clerk data
+      const firstName = data.first_name || "";
+      const lastName = data.last_name || "";
+      const fullName = `${firstName} ${lastName}`.trim();
+      
+      // Get email from Clerk
+      const email = data.email_addresses?.[0]?.email_address || "";
+      
+      // Generate a proper name fallback from email if no name provided
+      let finalName = fullName;
+      if (!finalName) {
+        const emailUsername = email.split('@')[0] || "user";
+        // Capitalize first letter and use the rest
+        finalName = emailUsername.charAt(0).toUpperCase() + emailUsername.slice(1);
+      }
+
+      // If we still don't have a proper name, use a more descriptive placeholder
+      if (!finalName || finalName === 'User') {
+        finalName = `User ${data.id.slice(-4)}`; // e.g., "User 84u3"
+      }
+
+      console.log(`📝 Setting user name to: "${finalName}"`);
+      console.log(`📧 User email: ${email}`);
+
+      // Create or update the user with proper names
       const user = await prisma.user.upsert({
         where: { id: data.id },
         update: {
-          email: data.email_addresses?.[0]?.email_address || "",
-          name:
-            `${data.first_name || ""} ${data.last_name || ""}`.trim() || "User",
+          email: email,
+          name: finalName,
           image: data.image_url || "",
         },
         create: {
           id: data.id,
-          email: data.email_addresses?.[0]?.email_address || "",
-          name:
-            `${data.first_name || ""} ${data.last_name || ""}`.trim() || "User",
+          email: email,
+          name: finalName,
           image: data.image_url || "",
         },
       });
 
-      console.log(`✅ User created: ${user.id}`);
+      console.log(`✅ User created: ${user.name} (${user.email})`);
 
       // 🔹 Find the default workspace
       const defaultWorkspace = await prisma.workspace.findFirst({
@@ -71,7 +94,7 @@ const syncUserCreation = inngest.createFunction(
           },
         });
         console.log(
-          `✅ Added ${user.id} to default workspace "${DEFAULT_WORKSPACE_NAME}"`
+          `✅ Added ${user.name} to default workspace "${DEFAULT_WORKSPACE_NAME}"`
         );
       } else {
         console.log(`ℹ️ User already in default workspace`);
