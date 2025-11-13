@@ -12,8 +12,7 @@ const DEFAULT_WORKSPACE_NAME = "The Burns Brothers";
    🔹 CLERK USER SYNC FUNCTIONS
 ========================================================= */
 
-// Handle Clerk user creation
-// Handle Clerk user creation - FIXED VERSION
+
 const syncUserCreation = inngest.createFunction(
   { id: "sync-user-from-clerk" },
   { event: "clerk/user.created" },
@@ -356,242 +355,136 @@ const syncUserFromInvitation = inngest.createFunction(
    🔹 INNGEST FUNCTION TO SEND EMAIL ON TASK CREATION
 ========================================================= */
 
-// Immediate assignment email (no sleep to prevent timeout)
 const sendTaskAssignmentEmail = inngest.createFunction(
-  { 
-    id: "send-task-assignment-mail",
-    // 🛠️ FIX: Add explicit timeout
-    timeout: "5m"
-  },
+  { id: "send-task-assignment-mail" },
   { event: "app/task.assigned" },
   async ({ event, step }) => {
     const { taskId, assigneeId, origin } = event.data;
-
-    console.log(`🎯 Processing task assignment: ${taskId} for user: ${assigneeId}`);
-
-    try {
-      // Get task with assignee details
-      const task = await prisma.task.findUnique({
-        where: { id: taskId },
-        include: { 
-          assignees: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true
-                }
+    
+    // Fetch task with specific assignee
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { 
+        assignees: {
+          where: { userId: assigneeId },
+          include: { 
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
               }
             }
-          }, 
-          project: {
-            include: {
-              workspace: true
-            }
-          } 
+          }
         },
-      });
-
-      if (!task) {
-        console.error(`❌ Task not found: ${taskId}`);
-        return;
+        project: {
+          include: {
+            workspace: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
       }
+    });
 
-      // Find the specific assignee
-      const assignee = task.assignees.find(a => a.user.id === assigneeId);
-      
-      if (!assignee) {
-        console.error(`❌ Assignee not found for task: ${taskId}`);
-        return;
-      }
-
-      if (!assignee.user.email) {
-        console.error(`❌ Assignee has no email: ${assigneeId}`);
-        return;
-      }
-
-      console.log(`📧 Sending email to: ${assignee.user.email}`);
-
-      // Send initial assignment email only (remove the sleep for now)
-      await sendEmail({
-        to: assignee.user.email,
-        subject: `New Task Assignment in ${task.project.name}`,
-        body: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-              <h1 style="color: #333; margin-bottom: 10px;">🎯 New Task Assignment</h1>
-              <p style="color: #666; font-size: 16px;">You've been assigned a new task in ${task.project.name}</p>
-            </div>
-
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 25px;">
-              <h2 style="color: #007bff; margin: 0 0 10px 0;">${task.title}</h2>
-              
-              ${task.description ? `
-              <div style="margin: 15px 0;">
-                <strong style="color: #333;">Description:</strong>
-                <p style="color: #555; margin: 5px 0 0 0; line-height: 1.5;">${task.description}</p>
-              </div>
-              ` : ""}
-              
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
-                <div>
-                  <strong style="color: #333; display: block;">Status</strong>
-                  <span style="color: #666; text-transform: capitalize;">${task.status.toLowerCase().replace("_", " ")}</span>
-                </div>
-                <div>
-                  <strong style="color: #333; display: block;">Priority</strong>
-                  <span style="color: #666; text-transform: capitalize;">${task.priority.toLowerCase()}</span>
-                </div>
-                <div>
-                  <strong style="color: #333; display: block;">Type</strong>
-                  <span style="color: #666; text-transform: capitalize;">${task.type.toLowerCase()}</span>
-                </div>
-                <div>
-                  <strong style="color: #333; display: block;">Due Date</strong>
-                  <span style="color: #666;">${new Date(task.due_date).toLocaleDateString()}</span>
-                </div>
-              </div>
-            </div>
-
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${origin}/projectsDetail?id=${task.project.id}&tab=tasks&taskId=${task.id}" 
-                style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-                View Task in App
-              </a>
-            </div>
-          </div>
-        `,
-      });
-
-      console.log(`✅ Task assignment email sent to: ${assignee.user.email}`);
-
-      // 🛠️ FIX: Schedule reminder as a separate event instead of using sleep
-      if (task.due_date) {
-        const reminderDate = new Date(task.due_date);
-        
-        // Schedule reminder for the due date
-        await inngest.send({
-          name: "app/task.reminder",
-          data: {
-            taskId,
-            assigneeId,
-            origin,
-            reminderType: "due_date"
-          },
-          ts: reminderDate.getTime()
-        });
-        
-        console.log(`✅ Scheduled reminder for: ${reminderDate}`);
-      }
-
-    } catch (error) {
-      console.error("❌ Error in task assignment email function:", error);
+    if (!task) {
+      console.error(`Task ${taskId} not found`);
+      return;
     }
-  }
-);
 
-/* =========================================================
-   🔹 SEPARATE FUNCTION FOR TASK REMINDERS
-========================================================= */
+    if (task.assignees.length === 0) {
+      console.error(`Assignee ${assigneeId} not found for task ${taskId}`);
+      return;
+    }
 
-// Separate function for reminders (won't cause timeout)
-const sendTaskReminder = inngest.createFunction(
-  { 
-    id: "send-task-reminder",
-    timeout: "5m"
-  },
-  { event: "app/task.reminder" },
-  async ({ event, step }) => {
-    const { taskId, assigneeId, origin, reminderType } = event.data;
+    const assignment = task.assignees[0];
+    
+    // Send assignment email
+    await step.run('send-assignment-email', async () => {
+      await sendEmail({
+        to: assignment.user.email,
+        subject: `New Task Assignment in ${task.project.name}`,
+        body: `<div style="max-width: 600px;">
+          <h2>Hi ${assignment.user.name},</h2>
+          <p style="font-size: 16px;">You've been assigned a new task in <strong>${task.project.workspace.name}</strong> → <strong>${task.project.name}</strong>:</p>
+          <p style="font-size: 18px; font-weight: bold; color: #007bff; margin: 8px 0;">${task.title}</p>
+          <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
+            <p style="margin: 6px 0;"><strong>Description:</strong> ${task.description || 'No description provided'}</p>
+            <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
+            <p style="margin: 6px 0;"><strong>Priority:</strong> ${task.priority}</p>
+            <p style="margin: 6px 0;"><strong>Status:</strong> ${task.status}</p>
+          </div>
+          <a href="${origin}/tasks/${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
+            View Task
+          </a>
+          <p style="margin-top: 20px; font-size: 14px; color: #6c757d;">
+            Please make sure to review and complete it before the due date.
+          </p>
+        </div>`
+      });
+      console.log(`✅ Assignment email sent to ${assignment.user.email} for task ${taskId}`);
+    });
 
-    console.log(`🔔 Processing task reminder: ${taskId} for user: ${assigneeId}`);
+    // Schedule reminder if due date is in the future
+    const dueDate = new Date(task.due_date);
+    const today = new Date();
+    
+    if (dueDate > today) {
+      // Sleep until due date
+      await step.sleepUntil('wait-for-due-date', dueDate);
 
-    try {
-      // Get current task status
-      const task = await prisma.task.findUnique({
-        where: { id: taskId },
-        include: { 
-          assignees: {
-            include: {
-              user: {
-                select: { 
-                  id: true, 
-                  name: true, 
-                  email: true 
+      await step.run('check-if-task-is-completed', async () => {
+        const updatedTask = await prisma.task.findUnique({
+          where: { id: taskId },
+          select: {
+            status: true,
+            title: true,
+            due_date: true,
+            description: true,
+            project: {
+              include: {
+                workspace: {
+                  select: {
+                    name: true
+                  }
                 }
               }
             }
-          }, 
-          project: true 
-        }
-      });
-
-      if (!task) {
-        console.error(`❌ Task not found for reminder: ${taskId}`);
-        return;
-      }
-      
-      const assignee = task.assignees.find(a => a.user.id === assigneeId);
-      if (!assignee || !assignee.user.email) {
-        console.error(`❌ Assignee not found for reminder: ${assigneeId}`);
-        return;
-      }
-
-      console.log(`📧 Sending reminder to: ${assignee.user.email}`);
-
-      // Only send reminder if task is not completed
-      if (task.status !== "DONE") {
-        await sendEmail({
-          to: assignee.user.email,
-          subject: `Reminder: Task Due in ${task.project.name}`,
-          body: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #333; margin-bottom: 20px;">Hi ${assignee.user.name}, 👋</h2>
-
-              <p style="font-size: 16px; color: #666; margin-bottom: 20px;">
-                You have a task due in <strong>${task.project.name}</strong>:
-              </p>
-              
-              <div style="border: 1px solid #ddd; padding: 16px; border-radius: 6px; margin-bottom: 30px; background: #f8f9fa;">
-                <h3 style="color: #007bff; margin: 0 0 10px 0;">${task.title}</h3>
-                
-                ${task.description ? `
-                <p style="margin: 10px 0;">
-                  <strong>Description:</strong> ${task.description}
-                </p>
-                ` : ''}
-                
-                <p style="margin: 8px 0;">
-                  <strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}
-                </p>
-                <p style="margin: 8px 0;">
-                  <strong>Status:</strong> ${task.status.toLowerCase().replace('_', ' ')}
-                </p>
-                <p style="margin: 8px 0;">
-                  <strong>Priority:</strong> ${task.priority.toLowerCase()}
-                </p>
-              </div>
-              
-              <div style="text-align: center;">
-                <a href="${origin}/projectsDetail?id=${task.project.id}&tab=tasks&taskId=${task.id}" 
-                   style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: white; text-decoration: none; font-weight: bold; display: inline-block;">
-                  View Task in App
-                </a>
-              </div>
-
-              <p style="margin-top: 25px; font-size: 14px; color: #6c757d;">
-                Please make sure to review and complete it before the due date.
-              </p>
-            </div>
-          `
+          }
         });
-        console.log(`✅ Task reminder email sent to: ${assignee.user.email}`);
-      } else {
-        console.log(`ℹ️ Task is already completed, no reminder sent`);
-      }
-    } catch (error) {
-      console.error("❌ Error in task reminder function:", error);
+
+        if (!updatedTask || updatedTask.status === "DONE") {
+          console.log(`Task ${taskId} is completed, skipping reminder`);
+          return;
+        }
+
+        // Send reminder email
+        await step.run('send-reminder-email', async () => {
+          await sendEmail({
+            to: assignment.user.email,
+            subject: `Reminder: Task Due Today - ${updatedTask.project.name}`,
+            body: `<div style="max-width: 600px;">
+              <h2>Hi ${assignment.user.name},</h2>
+              <p style="font-size: 16px;">You have a task due today in <strong>${updatedTask.project.workspace.name}</strong> → <strong>${updatedTask.project.name}</strong>:</p>
+              <p style="font-size: 18px; font-weight: bold; color: #dc3545; margin: 8px 0;">${updatedTask.title}</p>
+              <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
+                <p style="margin: 6px 0;"><strong>Description:</strong> ${updatedTask.description || 'No description provided'}</p>
+                <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(updatedTask.due_date).toLocaleDateString()} <strong>(TODAY)</strong></p>
+                <p style="margin: 6px 0;"><strong>Status:</strong> ${updatedTask.status}</p>
+              </div>
+              <a href="${origin}/tasks/${taskId}" style="background-color: #dc3545; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
+                View Task
+              </a>
+              <p style="margin-top: 20px; font-size: 14px; color: #6c757d;">
+                This task is due today. Please complete it as soon as possible.
+              </p>
+            </div>`
+          });
+          console.log(`✅ Reminder email sent to ${assignment.user.email} for task ${taskId}`);
+        });
+      });
     }
   }
 );
@@ -707,6 +600,5 @@ export const functions = [
   syncWorkspaceMemberCreation,
   syncUserFromInvitation, // 🆕 ADD THE NEW USER SYNC FUNCTION
   sendTaskAssignmentEmail,
-  sendTaskReminder, // 🆕 ADD THE NEW REMINDER FUNCTION
   sendWorkspaceInvitationEmail,
 ];

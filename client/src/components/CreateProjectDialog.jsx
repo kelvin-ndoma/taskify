@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { XIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
-import toast from "react-hot-toast"
-import api from "../configs/api"
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import api from "../configs/api";
 import { useAuth } from "@clerk/clerk-react";
 import { addProject } from "../features/workspaceSlice";
 
 const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
-
-    const {getToken} = useAuth()
-    const dispatch = useDispatch()
-
+    const { getToken } = useAuth();
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
+    
     const { currentWorkspace } = useSelector((state) => state.workspace);
 
     const [formData, setFormData] = useState({
@@ -30,36 +31,97 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (!formData.team_lead) {
-                return toast.error("Please select a teamlead")
+            if (!formData.name.trim()) {
+                return toast.error("Project name is required");
             }
-            setIsSubmitting(true)
 
-            const {data} = await api.post("/api/projects", {workspaceId: currentWorkspace.id, ...formData}, {headers: {Authorization: `Bearer ${await getToken()}`}})
+            setIsSubmitting(true);
 
-            dispatch(addProject(data.projct))
-            setIsDialogOpen(false)
+            const token = await getToken();
+            const { data } = await api.post(
+                "/api/projects", 
+                { 
+                    workspaceId: currentWorkspace.id, 
+                    ...formData,
+                    team_members: formData.team_members.filter(email => email !== formData.team_lead) // Remove team lead from members array
+                }, 
+                { 
+                    headers: { Authorization: `Bearer ${token}` } 
+                }
+            );
+
+            // 🆕 Fix: Correct property name and navigate to project detail
+            dispatch(addProject(data.project)); // Fixed: data.projct → data.project
+            
+            // 🆕 Navigate to the new project
+            navigate(`/projectsDetail?id=${data.project.id}&tab=tasks`);
+            
+            setIsDialogOpen(false);
+            
+            // 🆕 Reset form
+            setFormData({
+                name: "",
+                description: "",
+                status: "PLANNING",
+                priority: "MEDIUM",
+                start_date: "",
+                end_date: "",
+                team_members: [],
+                team_lead: "",
+                progress: 0,
+            });
+
+            toast.success("Project created successfully!");
 
         } catch (error) {
-            toast.error(error?.response?.data?.message || error.message)
+            console.error("Project creation error:", error);
+            toast.error(error?.response?.data?.message || error.message || "Failed to create project");
+        } finally {
+            setIsSubmitting(false);
         }
-
-        finally{
-            setIsSubmitting(false)
-        }
-        
     };
 
     const removeTeamMember = (email) => {
-        setFormData((prev) => ({ ...prev, team_members: prev.team_members.filter(m => m !== email) }));
+        setFormData((prev) => ({ 
+            ...prev, 
+            team_members: prev.team_members.filter(m => m !== email) 
+        }));
+    };
+
+    const addTeamMember = (email) => {
+        if (email && !formData.team_members.includes(email)) {
+            setFormData((prev) => ({ 
+                ...prev, 
+                team_members: [...prev.team_members, email] 
+            }));
+        }
+    };
+
+    // 🆕 Reset form when dialog closes
+    const handleClose = () => {
+        setIsDialogOpen(false);
+        setFormData({
+            name: "",
+            description: "",
+            status: "PLANNING",
+            priority: "MEDIUM",
+            start_date: "",
+            end_date: "",
+            team_members: [],
+            team_lead: "",
+            progress: 0,
+        });
     };
 
     if (!isDialogOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black/20 dark:bg-black/60 backdrop-blur flex items-center justify-center text-left z-50">
-            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 w-full max-w-lg text-zinc-900 dark:text-zinc-200 relative">
-                <button className="absolute top-3 right-3 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200" onClick={() => setIsDialogOpen(false)} >
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 w-full max-w-lg text-zinc-900 dark:text-zinc-200 relative max-h-[90vh] overflow-y-auto">
+                <button 
+                    className="absolute top-3 right-3 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200" 
+                    onClick={handleClose}
+                >
                     <XIcon className="size-5" />
                 </button>
 
@@ -73,21 +135,37 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Project Name */}
                     <div>
-                        <label className="block text-sm mb-1">Project Name</label>
-                        <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Enter project name" className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" required />
+                        <label className="block text-sm mb-1">Project Name *</label>
+                        <input 
+                            type="text" 
+                            value={formData.name} 
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
+                            placeholder="Enter project name" 
+                            className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" 
+                            required 
+                        />
                     </div>
 
                     {/* Description */}
                     <div>
                         <label className="block text-sm mb-1">Description</label>
-                        <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Describe your project" className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm h-20" />
+                        <textarea 
+                            value={formData.description} 
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
+                            placeholder="Describe your project" 
+                            className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm h-20" 
+                        />
                     </div>
 
                     {/* Status & Priority */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm mb-1">Status</label>
-                            <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" >
+                            <select 
+                                value={formData.status} 
+                                onChange={(e) => setFormData({ ...formData, status: e.target.value })} 
+                                className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" 
+                            >
                                 <option value="PLANNING">Planning</option>
                                 <option value="ACTIVE">Active</option>
                                 <option value="COMPLETED">Completed</option>
@@ -98,7 +176,11 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
 
                         <div>
                             <label className="block text-sm mb-1">Priority</label>
-                            <select value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" >
+                            <select 
+                                value={formData.priority} 
+                                onChange={(e) => setFormData({ ...formData, priority: e.target.value })} 
+                                className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" 
+                            >
                                 <option value="LOW">Low</option>
                                 <option value="MEDIUM">Medium</option>
                                 <option value="HIGH">High</option>
@@ -110,22 +192,37 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm mb-1">Start Date</label>
-                            <input type="date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" />
+                            <input 
+                                type="date" 
+                                value={formData.start_date} 
+                                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} 
+                                className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" 
+                            />
                         </div>
                         <div>
                             <label className="block text-sm mb-1">End Date</label>
-                            <input type="date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} min={formData.start_date && new Date(formData.start_date).toISOString().split('T')[0]} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" />
+                            <input 
+                                type="date" 
+                                value={formData.end_date} 
+                                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} 
+                                min={formData.start_date} 
+                                className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" 
+                            />
                         </div>
                     </div>
 
-                    {/* Lead */}
+                    {/* Team Lead */}
                     <div>
                         <label className="block text-sm mb-1">Project Lead</label>
-                        <select value={formData.team_lead} onChange={(e) => setFormData({ ...formData, team_lead: e.target.value, team_members: e.target.value ? [...new Set([...formData.team_members, e.target.value])] : formData.team_members, })} className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" >
-                            <option value="">No lead</option>
+                        <select 
+                            value={formData.team_lead} 
+                            onChange={(e) => setFormData({ ...formData, team_lead: e.target.value })} 
+                            className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm" 
+                        >
+                            <option value="">Select team lead</option>
                             {currentWorkspace?.members?.map((member) => (
-                                <option key={member.user.email} value={member.user.email}>
-                                    {member.user.email}
+                                <option key={member.user.id} value={member.user.email}>
+                                    {member.user.name} ({member.user.email})
                                 </option>
                             ))}
                         </select>
@@ -134,19 +231,20 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                     {/* Team Members */}
                     <div>
                         <label className="block text-sm mb-1">Team Members</label>
-                        <select className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
-                            onChange={(e) => {
-                                if (e.target.value && !formData.team_members.includes(e.target.value)) {
-                                    setFormData((prev) => ({ ...prev, team_members: [...prev.team_members, e.target.value] }));
-                                }
-                            }}
+                        <select 
+                            className="w-full px-3 py-2 rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 mt-1 text-zinc-900 dark:text-zinc-200 text-sm"
+                            onChange={(e) => addTeamMember(e.target.value)}
+                            defaultValue=""
                         >
                             <option value="">Add team members</option>
                             {currentWorkspace?.members
-                                ?.filter((email) => !formData.team_members.includes(email))
+                                ?.filter((member) => 
+                                    member.user.email !== formData.team_lead && 
+                                    !formData.team_members.includes(member.user.email)
+                                )
                                 .map((member) => (
-                                    <option key={member.user.email} value={member.email}>
-                                        {member.user.email}
+                                    <option key={member.user.id} value={member.user.email}>
+                                        {member.user.name} ({member.user.email})
                                     </option>
                                 ))}
                         </select>
@@ -156,7 +254,11 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                                 {formData.team_members.map((email) => (
                                     <div key={email} className="flex items-center gap-1 bg-blue-200/50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 px-2 py-1 rounded-md text-sm" >
                                         {email}
-                                        <button type="button" onClick={() => removeTeamMember(email)} className="ml-1 hover:bg-blue-300/30 dark:hover:bg-blue-500/30 rounded" >
+                                        <button 
+                                            type="button" 
+                                            onClick={() => removeTeamMember(email)} 
+                                            className="ml-1 hover:bg-blue-300/30 dark:hover:bg-blue-500/30 rounded" 
+                                        >
                                             <XIcon className="w-3 h-3" />
                                         </button>
                                     </div>
@@ -167,10 +269,19 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
 
                     {/* Footer */}
                     <div className="flex justify-end gap-3 pt-2 text-sm">
-                        <button type="button" onClick={() => setIsDialogOpen(false)} className="px-4 py-2 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800" >
+                        <button 
+                            type="button" 
+                            onClick={handleClose} 
+                            className="px-4 py-2 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800" 
+                            disabled={isSubmitting}
+                        >
                             Cancel
                         </button>
-                        <button disabled={isSubmitting || !currentWorkspace} className="px-4 py-2 rounded bg-gradient-to-br from-blue-500 to-blue-600 text-white dark:text-zinc-200" >
+                        <button 
+                            type="submit"
+                            disabled={isSubmitting || !formData.name.trim() || !currentWorkspace} 
+                            className="px-4 py-2 rounded bg-gradient-to-br from-blue-500 to-blue-600 text-white dark:text-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed" 
+                        >
                             {isSubmitting ? "Creating..." : "Create Project"}
                         </button>
                     </div>

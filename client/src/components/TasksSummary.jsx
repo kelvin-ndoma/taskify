@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Clock, AlertTriangle, User } from "lucide-react";
+import { ArrowRight, Clock, AlertTriangle, User, Users } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useUser } from "@clerk/clerk-react";
 
 export default function TasksSummary() {
 
     const { currentWorkspace } = useSelector((state) => state.workspace);
-    const {user} = useUser()
+    const { user } = useUser();
     const [tasks, setTasks] = useState([]);
 
     // Get all tasks for all projects in current workspace
@@ -16,8 +16,15 @@ export default function TasksSummary() {
         }
     }, [currentWorkspace]);
 
-    const myTasks = tasks.filter(i => i.assigneeId === user.id);
-    const overdueTasks = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'DONE');
+    // 🆕 Fix: Check if user is in assignees array
+    const myTasks = tasks.filter(task => 
+        task.assignees?.some(assignee => assignee.user?.id === user.id)
+    );
+    
+    const overdueTasks = tasks.filter(t => 
+        t.due_date && new Date(t.due_date) < new Date() && t.status !== 'DONE'
+    );
+    
     const inProgressIssues = tasks.filter(i => i.status === 'IN_PROGRESS');
 
     const summaryCards = [
@@ -68,14 +75,22 @@ export default function TasksSummary() {
                             </p>
                         ) : (
                             <div className="space-y-3">
-                                {card.items.map((issue) => (
-                                    <div key={issue.id} className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+                                {card.items.map((task) => (
+                                    <div key={task.id} className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
                                         <h4 className="text-sm font-medium text-gray-800 dark:text-white truncate">
-                                            {issue.title}
+                                            {task.title}
                                         </h4>
-                                        <p className="text-xs text-gray-600 dark:text-zinc-400 capitalize mt-1">
-                                            {issue.type} • {issue.priority} priority
-                                        </p>
+                                        <div className="flex items-center justify-between mt-1">
+                                            <p className="text-xs text-gray-600 dark:text-zinc-400 capitalize">
+                                                {task.type} • {task.priority} priority
+                                            </p>
+                                            {task.assignees && task.assignees.length > 0 && (
+                                                <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
+                                                    <Users className="w-3 h-3" />
+                                                    {task.assignees.length}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                                 {card.count > 3 && (

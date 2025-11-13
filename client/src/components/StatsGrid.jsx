@@ -1,11 +1,13 @@
 import { FolderOpen, CheckCircle, Users, AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import { useUser } from "@clerk/clerk-react";
 
 export default function StatsGrid() {
     const currentWorkspace = useSelector(
         (state) => state?.workspace?.currentWorkspace || null
     );
+    const { user } = useUser();
 
     const [stats, setStats] = useState({
         totalProjects: 0,
@@ -26,8 +28,8 @@ export default function StatsGrid() {
         },
         {
             icon: CheckCircle,
-            title: "Completed Projects",
-            value: stats.completedProjects,
+            title: "Active Projects",
+            value: stats.activeProjects,
             subtitle: `of ${stats.totalProjects} total`,
             bgColor: "bg-emerald-500/10",
             textColor: "text-emerald-500",
@@ -51,31 +53,54 @@ export default function StatsGrid() {
     ];
 
     useEffect(() => {
-        if (currentWorkspace) {
+        if (currentWorkspace && user) {
+            const now = new Date();
+            
+            // Calculate all tasks across all projects
+            const allTasks = currentWorkspace.projects.reduce((acc, project) => {
+                return [...acc, ...(project.tasks || [])];
+            }, []);
+
+            // Calculate tasks assigned to current user
+            const myTasks = allTasks.filter(task => {
+                // Check if task has assignees and if current user is one of them
+                return task.assignees?.some(assignee => assignee.user?.id === user.id);
+            }).length;
+
+            // Calculate overdue tasks (due date passed and not completed)
+            const overdueTasks = allTasks.filter(task => {
+                if (!task.due_date) return false;
+                const dueDate = new Date(task.due_date);
+                const isOverdue = dueDate < now;
+                const isNotCompleted = task.status !== 'DONE';
+                return isOverdue && isNotCompleted;
+            }).length;
+
             setStats({
                 totalProjects: currentWorkspace.projects.length,
                 activeProjects: currentWorkspace.projects.filter(
-                    (p) => p.status !== "CANCELLED" && p.status !== "COMPLETED"
+                    (p) => p.status === "ACTIVE" || p.status === "PLANNING"
                 ).length,
-                completedProjects: currentWorkspace.projects
-                    .filter((p) => p.status === "COMPLETED")
-                    .reduce((acc, project) => acc + project.tasks.length, 0),
-                myTasks: currentWorkspace.projects.reduce(
-                    (acc, project) =>
-                        acc +
-                        project.tasks.filter(
-                            (t) => t.assignee?.email === currentWorkspace.owner.email
-                        ).length,
-                    0
-                ),
-                overdueIssues: currentWorkspace.projects.reduce(
-                    (acc, project) =>
-                        acc + project.tasks.filter((t) => t.due_date < new Date()).length,
-                    0
-                ),
+                completedProjects: currentWorkspace.projects.filter(
+                    (p) => p.status === "COMPLETED"
+                ).length,
+                myTasks: myTasks,
+                overdueIssues: overdueTasks,
+            });
+
+            // Debug logging
+            console.log('📊 Dashboard Stats:', {
+                totalProjects: currentWorkspace.projects.length,
+                activeProjects: currentWorkspace.projects.filter(p => p.status === "ACTIVE" || p.status === "PLANNING").length,
+                completedProjects: currentWorkspace.projects.filter(p => p.status === "COMPLETED").length,
+                myTasks,
+                overdueTasks,
+                allTasksCount: allTasks.length,
+                currentUserId: user.id,
+                workspaceName: currentWorkspace.name
             });
         }
-    }, [currentWorkspace]);
+    }, [currentWorkspace, user]);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 my-9">

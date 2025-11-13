@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { GitCommit, MessageSquare, Clock, Bug, Zap, Square } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { GitCommit, MessageSquare, Clock, Bug, Zap, Square, Users } from "lucide-react";
 import { format } from "date-fns";
 import { useSelector } from "react-redux";
 
@@ -22,9 +22,7 @@ const RecentActivity = () => {
     const { currentWorkspace } = useSelector((state) => state.workspace);
 
     const getTasksFromCurrentWorkspace = () => {
-
         if (!currentWorkspace) return;
-
         const tasks = currentWorkspace.projects.flatMap((project) => project.tasks.map((task) => task));
         setTasks(tasks);
     };
@@ -70,14 +68,17 @@ const RecentActivity = () => {
                                             </div>
                                             <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
                                                 <span className="capitalize">{task.type.toLowerCase()}</span>
-                                                {task.assignee && (
+                                                
+                                                {/* 🆕 Multiple Assignees */}
+                                                {task.assignees && task.assignees.length > 0 ? (
                                                     <div className="flex items-center gap-1">
-                                                        <div className="w-4 h-4 bg-zinc-300 dark:bg-zinc-700 rounded-full flex items-center justify-center text-[10px] text-zinc-800 dark:text-zinc-200">
-                                                            {task.assignee.name[0].toUpperCase()}
-                                                        </div>
-                                                        {task.assignee.name}
+                                                        <Users className="w-3 h-3" />
+                                                        <span>{task.assignees.length} assignee{task.assignees.length !== 1 ? 's' : ''}</span>
                                                     </div>
+                                                ) : (
+                                                    <span>No assignees</span>
                                                 )}
+                                                
                                                 <span>
                                                     {format(new Date(task.updatedAt), "MMM d, h:mm a")}
                                                 </span>
