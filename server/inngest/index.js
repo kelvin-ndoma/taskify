@@ -587,6 +587,154 @@ const sendWorkspaceInvitationEmail = inngest.createFunction(
 );
 
 /* =========================================================
+   🔹 NEW EVENTS FOR TASK UPDATES AND COMMENTS
+========================================================= */
+
+// Send email when task status changes
+const sendTaskStatusUpdateEmail = inngest.createFunction(
+  { id: "send-task-status-update-mail" },
+  { event: "app/task.status.updated" },
+  async ({ event, step }) => {
+    const { taskId, oldStatus, newStatus, updaterId, origin } = event.data;
+    
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: {
+        assignees: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        project: {
+          include: {
+            workspace: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!task || task.assignees.length === 0) return;
+
+    const updater = await prisma.user.findUnique({
+      where: { id: updaterId },
+      select: { name: true }
+    });
+
+    // Send emails to all assignees
+    for (const assignee of task.assignees) {
+      await step.run(`send-status-update-email-${assignee.user.id}`, async () => {
+        await sendEmail({
+          to: assignee.user.email,
+          subject: `Task Status Updated: ${task.title}`,
+          body: `<div style="max-width: 600px;">
+            <h2>Hi ${assignee.user.name},</h2>
+            <p style="font-size: 16px;">The status of your task in <strong>${task.project.workspace.name}</strong> → <strong>${task.project.name}</strong> has been updated:</p>
+            <p style="font-size: 18px; font-weight: bold; color: #007bff; margin: 8px 0;">${task.title}</p>
+            <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
+              <p style="margin: 6px 0;"><strong>Status Changed:</strong> ${oldStatus} → <strong>${newStatus}</strong></p>
+              <p style="margin: 6px 0;"><strong>Updated By:</strong> ${updater?.name || "Team Member"}</p>
+              <p style="margin: 6px 0;"><strong>Description:</strong> ${task.description || 'No description provided'}</p>
+            </div>
+            <a href="${origin}/taskDetails?projectId=${task.projectId}&taskId=${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
+              View Task
+            </a>
+            <p style="margin-top: 20px; font-size: 14px; color: #6c757d;">
+              Stay updated with the latest changes to your tasks.
+            </p>
+          </div>`
+        });
+        console.log(`✅ Status update email sent to ${assignee.user.email} for task ${taskId}`);
+      });
+    }
+  }
+);
+
+// Send email when new comment is added
+const sendNewCommentEmail = inngest.createFunction(
+  { id: "send-new-comment-mail" },
+  { event: "app/task.comment.added" },
+  async ({ event, step }) => {
+    const { taskId, commentId, commenterId, origin } = event.data;
+    
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: {
+        assignees: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        project: {
+          include: {
+            workspace: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const comment = await prisma.comment.findUnique({
+      where: { id: commentId },
+      include: {
+        user: {
+          select: {
+            name: true
+          }
+        }
+      }
+    });
+
+    if (!task || !comment || task.assignees.length === 0) return;
+
+    // Send emails to all assignees except the commenter
+    for (const assignee of task.assignees) {
+      if (assignee.user.id !== commenterId) { // Don't email the commenter
+        await step.run(`send-comment-email-${assignee.user.id}`, async () => {
+          await sendEmail({
+            to: assignee.user.email,
+            subject: `New Comment on Task: ${task.title}`,
+            body: `<div style="max-width: 600px;">
+              <h2>Hi ${assignee.user.name},</h2>
+              <p style="font-size: 16px;">A new comment was added to your task in <strong>${task.project.workspace.name}</strong> → <strong>${task.project.name}</strong>:</p>
+              <p style="font-size: 18px; font-weight: bold; color: #007bff; margin: 8px 0;">${task.title}</p>
+              <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px;">
+                <p style="margin: 6px 0 10px 0;"><strong>Comment by ${comment.user.name}:</strong></p>
+                <p style="margin: 0; font-style: italic; background: #f8f9fa; padding: 10px; border-radius: 4px;">${comment.content}</p>
+              </div>
+              <a href="${origin}/taskDetails?projectId=${task.projectId}&taskId=${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
+                View Task & Reply
+              </a>
+              <p style="margin-top: 20px; font-size: 14px; color: #6c757d;">
+                Stay engaged with your team's discussion.
+              </p>
+            </div>`
+          });
+          console.log(`✅ Comment notification sent to ${assignee.user.email} for task ${taskId}`);
+        });
+      }
+    }
+  }
+);
+/* =========================================================
    🔹 EXPORT ALL FUNCTIONS
 ========================================================= */
 
@@ -601,4 +749,6 @@ export const functions = [
   syncUserFromInvitation, // 🆕 ADD THE NEW USER SYNC FUNCTION
   sendTaskAssignmentEmail,
   sendWorkspaceInvitationEmail,
+  sendTaskStatusUpdateEmail, // 🆕 ADD THIS
+  sendNewCommentEmail,       // 🆕 ADD THIS
 ];

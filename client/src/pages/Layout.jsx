@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom'; // Add useNavigate
+import { Outlet } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Loader2Icon } from 'lucide-react';
-import { useUser, SignIn, useAuth } from '@clerk/clerk-react';
+import { useUser, useAuth } from '@clerk/clerk-react';
 
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
@@ -16,9 +16,8 @@ const Layout = () => {
     const dispatch = useDispatch();
     const { user, isLoaded: clerkLoaded } = useUser();
     const { getToken } = useAuth();
-    const navigate = useNavigate(); // Add navigate
 
-    // 🆕 Use ref to track initialization to prevent infinite loops
+    // Use ref to track initialization to prevent infinite loops
     const initializedRef = useRef(false);
 
     // Load theme on mount
@@ -26,23 +25,7 @@ const Layout = () => {
         dispatch(loadTheme());
     }, [dispatch]);
 
-    // 🆕 Redirect to sign-up if user needs to complete profile
-    useEffect(() => {
-        if (user && clerkLoaded) {
-            // Check if user has incomplete profile (generic name)
-            const hasGenericName = user.firstName === null || 
-                                 user.lastName === null || 
-                                 !user.firstName || 
-                                 !user.lastName;
-            
-            if (hasGenericName) {
-                console.log('🔄 User needs to complete profile, redirecting to sign-up');
-                navigate('/sign-up');
-            }
-        }
-    }, [user, clerkLoaded, navigate]);
-
-    // 🆕 FIXED: Initialize workspaces - SINGLE EXECUTION
+    // FIXED: Initialize workspaces - SINGLE EXECUTION
     useEffect(() => {
         const initializeUserData = async () => {
             // Prevent multiple initializations
@@ -81,11 +64,16 @@ const Layout = () => {
         initializeUserData();
     }, [user, clerkLoaded, dispatch, getToken, initialized, workspaces.length]);
 
-    // 🆕 Debug logging to track re-renders
+    // Debug logging to track re-renders
     useEffect(() => {
         console.log('🔍 Layout render state:', {
             clerkLoaded,
             user: !!user,
+            userProfile: user ? { 
+                firstName: user.firstName, 
+                lastName: user.lastName,
+                hasFullName: !!(user.firstName && user.lastName)
+            } : null,
             workspacesCount: workspaces.length,
             loading,
             initialized,
@@ -105,20 +93,7 @@ const Layout = () => {
         );
     }
 
-    // 2. User not authenticated - show sign in
-    if (!user) {
-        return (
-            <div className="flex justify-center items-center min-h-screen bg-white dark:bg-zinc-950 p-4">
-                <SignIn 
-                    routing="path"
-                    path="/sign-in"
-                    signUpUrl="/sign-up" // Redirect to our custom sign-up
-                />
-            </div>
-        );
-    }
-
-    // 3. Workspace data still initializing - show loading
+    // 2. Workspace data still initializing - show loading
     if (loading || !initialized) {
         return (
             <div className="flex items-center justify-center h-screen bg-white dark:bg-zinc-950">
@@ -128,7 +103,7 @@ const Layout = () => {
         );
     }
 
-    // 4. User authenticated but no workspaces (shouldn't happen with default workspace)
+    // 3. User authenticated but no workspaces (shouldn't happen with default workspace)
     if (workspaces.length === 0) {
         return (
             <div className="min-h-screen flex justify-center items-center bg-white dark:bg-zinc-950 p-4">
@@ -153,7 +128,7 @@ const Layout = () => {
         );
     }
 
-    // 5. SUCCESS: User authenticated with workspaces - show main app
+    // 4. SUCCESS: User authenticated with workspaces - show main app
     return (
         <div className="flex bg-white dark:bg-zinc-950 text-gray-900 dark:text-slate-100">
             <Sidebar isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />

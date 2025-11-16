@@ -187,6 +187,7 @@ export const createTask = async (req, res) => {
 };
 
 // Update task
+// Update task
 export const updateTask = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -262,6 +263,9 @@ export const updateTask = async (req, res) => {
         });
       }
     }
+
+    // Track if status changed for email notification
+    const statusChanged = status && status !== task.status;
 
     // Update task with transaction
     const updatedTask = await prisma.$transaction(async (tx) => {
@@ -344,6 +348,25 @@ export const updateTask = async (req, res) => {
     });
 
     console.log(`✅ Task updated: ${updatedTask.id}`);
+
+    // 🔥 TRIGGER EMAIL EVENTS FOR STATUS CHANGES
+    if (statusChanged) {
+      try {
+        await inngest.send({
+          name: "app/task.status.updated",
+          data: {
+            taskId: taskId,
+            oldStatus: task.status,
+            newStatus: status,
+            updaterId: userId,
+            origin: origin || process.env.FRONTEND_URL || "http://localhost:3000",
+          },
+        });
+        console.log(`✅ Triggered status update event for task ${taskId}`);
+      } catch (eventError) {
+        console.error(`❌ Failed to trigger status update event for task ${taskId}:`, eventError);
+      }
+    }
 
     // 🔥 TRIGGER EMAIL EVENTS FOR NEW ASSIGNEES
     if (assignees !== undefined) {

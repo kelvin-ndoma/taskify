@@ -1,9 +1,11 @@
 import prisma from "../configs/prisma.js";
+import { inngest } from "../inngest/index.js";
 
 // Add comment
 export const addComment = async (req, res) => {
   try {
     const { userId } = await req.auth();
+    const origin = req.get("origin");
     const { content, taskId } = req.body;
 
     // Validate input
@@ -68,6 +70,24 @@ export const addComment = async (req, res) => {
         } 
       },
     });
+
+    console.log(`✅ Comment created: ${comment.id} for task: ${taskId}`);
+
+    // 🔥 TRIGGER EMAIL EVENT FOR NEW COMMENT
+    try {
+      await inngest.send({
+        name: "app/task.comment.added",
+        data: {
+          taskId: taskId,
+          commentId: comment.id,
+          commenterId: userId,
+          origin: origin || process.env.FRONTEND_URL || "http://localhost:3000",
+        },
+      });
+      console.log(`✅ Triggered comment notification event for task ${taskId}`);
+    } catch (eventError) {
+      console.error(`❌ Failed to trigger comment event for task ${taskId}:`, eventError);
+    }
 
     res.json({ 
       comment, 
