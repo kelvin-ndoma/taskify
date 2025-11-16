@@ -417,7 +417,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
             <p style="margin: 6px 0;"><strong>Priority:</strong> ${task.priority}</p>
             <p style="margin: 6px 0;"><strong>Status:</strong> ${task.status}</p>
           </div>
-          <a href="${origin}/tasks/${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
+          <a href="${origin}/taskDetails?projectId=${task.projectId}&taskId=${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
             View Task
           </a>
           <p style="margin-top: 20px; font-size: 14px; color: #6c757d;">
@@ -475,7 +475,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
                 <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(updatedTask.due_date).toLocaleDateString()} <strong>(TODAY)</strong></p>
                 <p style="margin: 6px 0;"><strong>Status:</strong> ${updatedTask.status}</p>
               </div>
-              <a href="${origin}/tasks/${taskId}" style="background-color: #dc3545; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
+              <a href="${origin}/taskDetails?projectId=${updatedTask.project.id}&taskId=${taskId}" style="background-color: #dc3545; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
                 View Task
               </a>
               <p style="margin-top: 20px; font-size: 14px; color: #6c757d;">
@@ -584,7 +584,6 @@ const sendWorkspaceInvitationEmail = inngest.createFunction(
       console.error("❌ Error sending workspace invitation email:", error);
     }
   }
-
 );
 
 /* =========================================================
