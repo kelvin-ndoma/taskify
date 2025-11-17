@@ -63,6 +63,7 @@ export const getUserWorkspaces = async (req, res) => {
 };
 
 // Add member to workspace
+// Add member to workspace (with default workspace enforcement)
 export const addMember = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -78,36 +79,85 @@ export const addMember = async (req, res) => {
       return res.status(400).json({ message: "Invalid role" });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    // Get or create user
+    let user = await prisma.user.findUnique({ where: { email } });
+    
+    if (!user) {
+      return res.status(404).json({ 
+        message: "User not found. They must sign up first before being invited to workspaces." 
+      });
+    }
 
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       include: { members: true, owner: true },
     });
-    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+    
+    if (!workspace) {
+      return res.status(404).json({ message: "Workspace not found" });
+    }
 
+    // Check permissions
     const isAdmin = workspace.members.some(
       (m) => m.userId === userId && m.role === "ADMIN"
     );
     const isOwner = workspace.ownerId === userId;
-    if (!isAdmin && !isOwner)
+    
+    if (!isAdmin && !isOwner) {
       return res
         .status(403)
         .json({ message: "You don't have permission to add members" });
+    }
 
+    // Check if user is already in this workspace
     const existingMember = workspace.members.find((m) => m.userId === user.id);
-    if (existingMember)
+    if (existingMember) {
       return res
         .status(400)
         .json({ message: "User is already a member of this workspace" });
+    }
 
+    // 🔥 CRITICAL: Ensure user is in default workspace first
+    const defaultWorkspace = await prisma.workspace.findFirst({
+      where: { slug: "the-burns-brothers" },
+    });
+
+    if (!defaultWorkspace) {
+      return res.status(500).json({ message: "Default workspace not found" });
+    }
+
+    // Check if user is in default workspace, if not add them
+    const defaultWorkspaceMembership = await prisma.workspaceMember.findUnique({
+      where: {
+        userId_workspaceId: {
+          userId: user.id,
+          workspaceId: defaultWorkspace.id,
+        },
+      },
+    });
+
+    if (!defaultWorkspaceMembership) {
+      console.log(`➕ Adding user ${user.email} to default workspace first`);
+      await prisma.workspaceMember.create({
+        data: {
+          userId: user.id,
+          workspaceId: defaultWorkspace.id,
+          role: "MEMBER",
+          message: "Auto-added via workspace invitation",
+        },
+      });
+      console.log(`✅ User ${user.email} added to The Burns Brothers workspace`);
+    } else {
+      console.log(`ℹ️ User ${user.email} already in default workspace`);
+    }
+
+    // Now add user to the target workspace
     const member = await prisma.workspaceMember.create({
       data: {
         userId: user.id,
         workspaceId,
         role,
-        message: message || "",
+        message: message || `Invited to ${workspace.name}`,
       },
       include: {
         user: {
@@ -116,10 +166,25 @@ export const addMember = async (req, res) => {
       },
     });
 
-    res.json({ member, message: "Member added successfully" });
+    console.log(`✅ User ${user.email} added to workspace ${workspace.name}`);
+
+    res.json({ 
+      member, 
+      message: "Member added successfully. User has been automatically added to The Burns Brothers workspace." 
+    });
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: error.code || error.message });
+    console.error("Error adding member:", error);
+    
+    // Handle specific Prisma errors
+    if (error.code === 'P2002') {
+      return res.status(400).json({ 
+        message: "User is already a member of this workspace" 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: error.message || "Failed to add member to workspace" 
+    });
   }
 };
 

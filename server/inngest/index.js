@@ -266,7 +266,7 @@ const syncWorkspaceDeletion = inngest.createFunction(
   }
 );
 
-// Add member to workspace after invitation accepted
+// Add member to workspace after invitation accepted - UPDATED
 const syncWorkspaceMemberCreation = inngest.createFunction(
   { id: "sync-workspace-member-from-clerk" },
   { event: "clerk/organizationInvitation.accepted" },
@@ -274,29 +274,31 @@ const syncWorkspaceMemberCreation = inngest.createFunction(
     const { data } = event;
 
     try {
-      console.log(`👥 Adding user to workspace: ${data.user_id} to ${data.organization_id}`);
+      console.log(`👥 Processing workspace invitation: ${data.user_id} to ${data.organization_id}`);
 
-      // First, try to get the user from Clerk's data or find existing user
+      // First, check if user exists in our database
       let user = await prisma.user.findUnique({ 
         where: { id: data.user_id } 
       });
 
       if (!user) {
-        console.log(`ℹ️ User ${data.user_id} not found in database, creating from Clerk data`);
-        
-        // Create user with available data from the invitation
-        user = await prisma.user.create({
-          data: {
-            id: data.user_id,
-            name: data.public_user_data?.first_name && data.public_user_data?.last_name 
-              ? `${data.public_user_data.first_name} ${data.public_user_data.last_name}`.trim()
-              : "User",
-            email: data.public_user_data?.email_addresses?.[0]?.email_address || `${data.user_id}@temp.com`,
-          },
-        });
-        console.log(`✅ Created user from invitation: ${user.name} (${user.email})`);
-      } else {
-        console.log(`✅ Found existing user: ${user.name} (${user.email})`);
+        console.log(`❌ User ${data.user_id} not found in database. User must sign up first before joining workspace.`);
+        return; // Exit early - don't create temporary user
+      }
+
+      console.log(`✅ Found existing user: ${user.name} (${user.email})`);
+
+      // Check if user is already in this workspace
+      const existingMembership = await prisma.workspaceMember.findFirst({
+        where: {
+          userId: data.user_id,
+          workspaceId: data.organization_id,
+        },
+      });
+
+      if (existingMembership) {
+        console.log(`ℹ️ User already in workspace`);
+        return;
       }
 
       // Add user to workspace
@@ -316,7 +318,7 @@ const syncWorkspaceMemberCreation = inngest.createFunction(
   }
 );
 
-// Sync user data when they accept workspace invitations
+// Sync user data when they accept workspace invitations - UPDATED
 const syncUserFromInvitation = inngest.createFunction(
   { id: "sync-user-from-invitation" },
   { event: "clerk/organizationInvitation.accepted" },
@@ -324,23 +326,26 @@ const syncUserFromInvitation = inngest.createFunction(
     const { data } = event;
 
     try {
-      console.log(`🔄 Syncing user data for: ${data.user_id}`);
+      console.log(`🔄 Checking user data for: ${data.user_id}`);
 
-      // Update user with available data from the invitation
-      const user = await prisma.user.upsert({
+      // Only sync if user already exists
+      const existingUser = await prisma.user.findUnique({
         where: { id: data.user_id },
-        update: {
+      });
+
+      if (!existingUser) {
+        console.log(`⏳ User ${data.user_id} doesn't exist yet. Waiting for sign up.`);
+        return;
+      }
+
+      // Update existing user with available data from the invitation
+      const user = await prisma.user.update({
+        where: { id: data.user_id },
+        data: {
           name: data.public_user_data?.first_name && data.public_user_data?.last_name 
             ? `${data.public_user_data.first_name} ${data.public_user_data.last_name}`.trim()
             : undefined,
           email: data.public_user_data?.email_addresses?.[0]?.email_address || undefined,
-        },
-        create: {
-          id: data.user_id,
-          name: data.public_user_data?.first_name && data.public_user_data?.last_name 
-            ? `${data.public_user_data.first_name} ${data.public_user_data.last_name}`.trim()
-            : "User",
-          email: data.public_user_data?.email_addresses?.[0]?.email_address || `${data.user_id}@temp.com`,
         },
       });
 
@@ -495,14 +500,14 @@ const sendTaskAssignmentEmail = inngest.createFunction(
 );
 
 /* =========================================================
-   🔹 INNGEST FUNCTION TO SEND WORKSPACE INVITATION EMAIL
+   🔹 INNGEST FUNCTION TO SEND WORKSPACE INVITATION EMAIL - UPDATED
 ========================================================= */
 
 const sendWorkspaceInvitationEmail = inngest.createFunction(
   { id: "send-workspace-invitation-mail" },
   { event: "app/workspace.invitation" },
   async ({ event, step }) => {
-    const { workspaceId, inviteeEmail, inviterName, origin, role } = event.data;
+    const { workspaceId, inviteeEmail, inviterName, origin, role, invitationId } = event.data;
 
     try {
       // Get workspace details
@@ -566,11 +571,11 @@ const sendWorkspaceInvitationEmail = inngest.createFunction(
 
                 <div style="text-align: center; margin: 30px 0;">
                   <p style="color: #666; margin-bottom: 15px;">
-                    To accept this invitation, please log in to your account:
+                    To accept this invitation, please create your account:
                   </p>
-                  <a href="${origin}" 
+                  <a href="${origin}/accept-invitation?invitation_code=${invitationId}" 
                     style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-                    Go to App
+                    Accept Invitation & Sign Up
                   </a>
                 </div>
 
