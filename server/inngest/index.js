@@ -416,6 +416,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
             <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
             <p style="margin: 6px 0;"><strong>Priority:</strong> ${task.priority}</p>
             <p style="margin: 6px 0;"><strong>Status:</strong> ${task.status}</p>
+            <p style="margin: 6px 0;"><strong>Type:</strong> ${task.type}</p>
           </div>
           <a href="${origin}/taskDetails?projectId=${task.projectId}&taskId=${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
             View Task
@@ -444,6 +445,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
             title: true,
             due_date: true,
             description: true,
+            type: true,
             project: {
               include: {
                 workspace: {
@@ -456,8 +458,9 @@ const sendTaskAssignmentEmail = inngest.createFunction(
           }
         });
 
-        if (!updatedTask || updatedTask.status === "DONE") {
-          console.log(`Task ${taskId} is completed, skipping reminder`);
+        // UPDATED: Check for both DONE and CANCELLED status
+        if (!updatedTask || updatedTask.status === "DONE" || updatedTask.status === "CANCELLED") {
+          console.log(`Task ${taskId} is completed or cancelled, skipping reminder`);
           return;
         }
 
@@ -474,6 +477,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
                 <p style="margin: 6px 0;"><strong>Description:</strong> ${updatedTask.description || 'No description provided'}</p>
                 <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(updatedTask.due_date).toLocaleDateString()} <strong>(TODAY)</strong></p>
                 <p style="margin: 6px 0;"><strong>Status:</strong> ${updatedTask.status}</p>
+                <p style="margin: 6px 0;"><strong>Type:</strong> ${updatedTask.type}</p>
               </div>
               <a href="${origin}/taskDetails?projectId=${updatedTask.project.id}&taskId=${taskId}" style="background-color: #dc3545; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
                 View Task
@@ -644,6 +648,7 @@ const sendTaskStatusUpdateEmail = inngest.createFunction(
               <p style="margin: 6px 0;"><strong>Status Changed:</strong> ${oldStatus} → <strong>${newStatus}</strong></p>
               <p style="margin: 6px 0;"><strong>Updated By:</strong> ${updater?.name || "Team Member"}</p>
               <p style="margin: 6px 0;"><strong>Description:</strong> ${task.description || 'No description provided'}</p>
+              <p style="margin: 6px 0;"><strong>Type:</strong> ${task.type}</p>
             </div>
             <a href="${origin}/taskDetails?projectId=${task.projectId}&taskId=${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
               View Task
@@ -720,6 +725,11 @@ const sendNewCommentEmail = inngest.createFunction(
                 <p style="margin: 6px 0 10px 0;"><strong>Comment by ${comment.user.name}:</strong></p>
                 <p style="margin: 0; font-style: italic; background: #f8f9fa; padding: 10px; border-radius: 4px;">${comment.content}</p>
               </div>
+              <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px;">
+                <p style="margin: 6px 0;"><strong>Task Status:</strong> ${task.status}</p>
+                <p style="margin: 6px 0;"><strong>Task Type:</strong> ${task.type}</p>
+                <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
+              </div>
               <a href="${origin}/taskDetails?projectId=${task.projectId}&taskId=${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
                 View Task & Reply
               </a>
@@ -734,6 +744,7 @@ const sendNewCommentEmail = inngest.createFunction(
     }
   }
 );
+
 /* =========================================================
    🔹 EXPORT ALL FUNCTIONS
 ========================================================= */
@@ -746,9 +757,9 @@ export const functions = [
   syncWorkspaceUpdation,
   syncWorkspaceDeletion,
   syncWorkspaceMemberCreation,
-  syncUserFromInvitation, // 🆕 ADD THE NEW USER SYNC FUNCTION
+  syncUserFromInvitation,
   sendTaskAssignmentEmail,
   sendWorkspaceInvitationEmail,
-  sendTaskStatusUpdateEmail, // 🆕 ADD THIS
-  sendNewCommentEmail,       // 🆕 ADD THIS
+  sendTaskStatusUpdateEmail,
+  sendNewCommentEmail,
 ];

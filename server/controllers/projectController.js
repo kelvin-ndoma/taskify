@@ -269,7 +269,7 @@ export const createProject = async (req, res) => {
             },
             comments: { 
               include: { 
-                user: {
+                user:{
                   select: {
                     id: true,
                     name: true,
@@ -787,10 +787,13 @@ export const getProjectStats = async (req, res) => {
       completedTasks: project.tasks.filter(task => task.status === 'DONE').length,
       inProgressTasks: project.tasks.filter(task => task.status === 'IN_PROGRESS').length,
       todoTasks: project.tasks.filter(task => task.status === 'TODO').length,
+      internalReviewTasks: project.tasks.filter(task => task.status === 'INTERNAL_REVIEW').length, // NEW
+      cancelledTasks: project.tasks.filter(task => task.status === 'CANCELLED').length, // NEW
       totalMembers: project.members.length,
       progress: project.progress,
       overdueTasks: project.tasks.filter(task => 
-        task.due_date && new Date(task.due_date) < new Date() && task.status !== 'DONE'
+        task.due_date && new Date(task.due_date) < new Date() && 
+        task.status !== 'DONE' && task.status !== 'CANCELLED' // UPDATED: Exclude cancelled tasks from overdue
       ).length
     };
 

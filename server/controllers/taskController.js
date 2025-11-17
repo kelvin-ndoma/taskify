@@ -12,9 +12,9 @@ export const createTask = async (req, res) => {
       projectId,
       title,
       description,
-      type,
-      status,
-      priority,
+      type = "GENERAL_TASK", // Updated default
+      status = "TODO", // Updated default
+      priority = "MEDIUM",
       assignees = [],
       due_date,
     } = req.body;
@@ -22,6 +22,29 @@ export const createTask = async (req, res) => {
     // Validate required fields
     if (!projectId || !title) {
       return res.status(400).json({ message: "Project ID and title are required." });
+    }
+
+    // Validate enum values
+    const validTaskTypes = ["GENERAL_TASK", "WEEKLY_EMAILS", "CALENDARS", "CLIENT", "SOCIAL", "OTHER"];
+    const validTaskStatuses = ["TODO", "IN_PROGRESS", "INTERNAL_REVIEW", "DONE", "CANCELLED"];
+    const validPriorities = ["LOW", "MEDIUM", "HIGH"];
+
+    if (type && !validTaskTypes.includes(type)) {
+      return res.status(400).json({ 
+        message: `Invalid task type. Must be one of: ${validTaskTypes.join(", ")}` 
+      });
+    }
+
+    if (status && !validTaskStatuses.includes(status)) {
+      return res.status(400).json({ 
+        message: `Invalid task status. Must be one of: ${validTaskStatuses.join(", ")}` 
+      });
+    }
+
+    if (priority && !validPriorities.includes(priority)) {
+      return res.status(400).json({ 
+        message: `Invalid priority. Must be one of: ${validPriorities.join(", ")}` 
+      });
     }
 
     // Check if user has admin role for project
@@ -187,7 +210,6 @@ export const createTask = async (req, res) => {
 };
 
 // Update task
-// Update task
 export const updateTask = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -228,6 +250,29 @@ export const updateTask = async (req, res) => {
       assignees, // Array of user IDs
       due_date,
     } = req.body;
+
+    // Validate enum values if provided
+    const validTaskTypes = ["GENERAL_TASK", "WEEKLY_EMAILS", "CALENDARS", "CLIENT", "SOCIAL", "OTHER"];
+    const validTaskStatuses = ["TODO", "IN_PROGRESS", "INTERNAL_REVIEW", "DONE", "CANCELLED"];
+    const validPriorities = ["LOW", "MEDIUM", "HIGH"];
+
+    if (type && !validTaskTypes.includes(type)) {
+      return res.status(400).json({ 
+        message: `Invalid task type. Must be one of: ${validTaskTypes.join(", ")}` 
+      });
+    }
+
+    if (status && !validTaskStatuses.includes(status)) {
+      return res.status(400).json({ 
+        message: `Invalid task status. Must be one of: ${validTaskStatuses.join(", ")}` 
+      });
+    }
+
+    if (priority && !validPriorities.includes(priority)) {
+      return res.status(400).json({ 
+        message: `Invalid priority. Must be one of: ${validPriorities.join(", ")}` 
+      });
+    }
 
     // Check permissions
     const isWorkspaceAdmin = task.project.workspace.members.some(
