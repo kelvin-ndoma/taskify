@@ -1,3 +1,4 @@
+// In your server file - UPDATED CORS configuration
 import express from 'express';
 import 'dotenv/config';
 import cors from 'cors';
@@ -12,65 +13,58 @@ import { protect } from './middlewares/authMiddleware.js';
 
 const app = express();
 
-// ✅ MORE EXPLICIT CORS Configuration
-const allowedOrigins = [
-  'https://tbb-project-management.vercel.app',
-  'http://127.0.0.1:5173', 
-  'http://localhost:5173'
-];
-
+// ✅ IMPROVED CORS Configuration
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('CORS blocked for origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'Access-Control-Allow-Headers',
-    'Access-Control-Request-Headers',
-    'Access-Control-Allow-Origin'
-  ],
-  exposedHeaders: ['Content-Length', 'Content-Type'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+    origin: [
+        'https://tbb-project-management.vercel.app',
+        'http://127.0.0.1:5173', 
+        'http://localhost:5173',
+        'http://localhost:3000' // Add localhost:3000 for good measure
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: [
+        'Content-Type', 
+        'Authorization', 
+        'Origin', 
+        'Accept',
+        'X-Requested-With',
+        'Access-Control-Allow-Headers',
+        'Access-Control-Allow-Origin'
+    ],
+    exposedHeaders: ['Content-Length', 'Authorization'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 }));
 
-// ✅ EXPLICITLY HANDLE OPTIONS REQUESTS
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.status(204).send();
-});
+// Handle preflight requests explicitly
+app.options('*', cors());
 
 app.use(express.json());
 app.use(clerkMiddleware());
 
-// ✅ Add CORS headers to all responses
+// ✅ Add CORS headers manually as fallback
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  next();
+    const allowedOrigins = [
+        'https://tbb-project-management.vercel.app',
+        'http://127.0.0.1:5173', 
+        'http://localhost:5173'
+    ];
+    const origin = req.headers.origin;
+    
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, Accept, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    
+    next();
 });
 
 // ✅ Health check route
@@ -88,12 +82,6 @@ app.use('/api/comments', protect, commentRouter);
 // ✅ 404 fallback
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
-});
-
-// ✅ Global error handler
-app.use((error, req, res, next) => {
-  console.error('Server error:', error);
-  res.status(500).json({ message: 'Internal server error' });
 });
 
 // ✅ Start server
