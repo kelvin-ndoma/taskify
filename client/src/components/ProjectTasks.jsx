@@ -241,7 +241,7 @@ const ProjectTasks = ({ tasks }) => {
                             key={name} 
                             name={name} 
                             onChange={handleFilterChange} 
-                            className="border not-dark:bg-white border-zinc-300 dark:border-zinc-800 outline-none px-3 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" 
+                            className="border bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 outline-none px-3 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" 
                         >
                             {options[name].map((opt, idx) => (
                                 <option key={idx} value={opt.value}>{opt.label}</option>
@@ -255,7 +255,7 @@ const ProjectTasks = ({ tasks }) => {
                     <button 
                         type="button" 
                         onClick={() => setFilters({ status: "", type: "", priority: "", assignee: "" })} 
-                        className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-purple-400 to-purple-500 text-zinc-100 dark:text-zinc-200 text-sm transition-colors" 
+                        className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-purple-400 to-purple-500 text-white text-sm transition-colors" 
                     >
                         <XIcon className="size-3" /> Reset
                     </button>
@@ -265,7 +265,7 @@ const ProjectTasks = ({ tasks }) => {
                     <button 
                         type="button" 
                         onClick={handleDelete} 
-                        className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-red-400 to-red-500 text-zinc-100 dark:text-zinc-200 text-sm transition-colors" 
+                        className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-red-400 to-red-500 text-white text-sm transition-colors" 
                     >
                         <Trash className="size-3" /> Delete ({selectedTasks.length})
                     </button>
@@ -277,8 +277,8 @@ const ProjectTasks = ({ tasks }) => {
                 <div className="w-full">
                     {/* Desktop/Table View */}
                     <div className="hidden lg:block overflow-x-auto">
-                        <table className="min-w-full text-sm text-left not-dark:bg-white text-zinc-900 dark:text-zinc-300">
-                            <thead className="text-xs uppercase dark:bg-zinc-800/70 text-zinc-500 dark:text-zinc-400">
+                        <table className="min-w-full text-sm text-left bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-300">
+                            <thead className="text-xs uppercase bg-zinc-50 dark:bg-zinc-800/70 text-zinc-500 dark:text-zinc-400">
                                 <tr>
                                     <th className="pl-2 pr-1">
                                         <input 
@@ -309,7 +309,7 @@ const ProjectTasks = ({ tasks }) => {
                                             <tr 
                                                 key={task.id} 
                                                 onClick={() => navigate(`/taskDetails?projectId=${task.projectId}&taskId=${task.id}`)} 
-                                                className="border-t border-zinc-300 dark:border-zinc-800 group hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all cursor-pointer" 
+                                                className="border-t border-zinc-300 dark:border-zinc-800 group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-all cursor-pointer" 
                                             >
                                                 <td onClick={e => e.stopPropagation()} className="pl-2 pr-1">
                                                     <input 
@@ -341,7 +341,7 @@ const ProjectTasks = ({ tasks }) => {
                                                         name="status" 
                                                         onChange={(e) => handleStatusChange(task.id, e.target.value)} 
                                                         value={task.status} 
-                                                        className="group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer" 
+                                                        className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 group-hover:ring-1 group-hover:ring-zinc-200 dark:group-hover:ring-zinc-700 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer" 
                                                     >
                                                         {/* 🆕 UPDATED: Status options */}
                                                         <option value="TODO">To Do</option>
@@ -375,7 +375,7 @@ const ProjectTasks = ({ tasks }) => {
                     </div>
 
                     {/* Mobile/Card View */}
-                    <div className="lg:hidden flex flex-col gap-4 p-4">
+                    <div className="lg:hidden flex flex-col gap-4 p-4 bg-white dark:bg-zinc-900">
                         {filteredTasks.length > 0 ? (
                             filteredTasks.map((task) => {
                                 const { icon: Icon, color } = typeIcons[task.type] || {};
@@ -384,7 +384,7 @@ const ProjectTasks = ({ tasks }) => {
                                 return (
                                     <div 
                                         key={task.id} 
-                                        className="dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-lg p-4 flex flex-col gap-3"
+                                        className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg p-4 flex flex-col gap-3"
                                     >
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-zinc-900 dark:text-zinc-200 text-sm font-semibold">{task.title}</h3>
@@ -417,7 +417,7 @@ const ProjectTasks = ({ tasks }) => {
                                                 name="status" 
                                                 onChange={(e) => handleStatusChange(task.id, e.target.value)} 
                                                 value={task.status} 
-                                                className="w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" 
+                                                className="w-full mt-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" 
                                             >
                                                 {/* 🆕 UPDATED: Status options */}
                                                 <option value="TODO">To Do</option>
