@@ -53,6 +53,8 @@ const VerifyEmail = () => {
         await setActive({ session: completeSignUp.createdSessionId });
         toast.success('Email verified successfully! 🎉');
         navigate('/');
+      } else {
+        toast.error('Verification incomplete. Please try again.');
       }
     } catch (err) {
       toast.error(err.errors?.[0]?.message || 'Verification failed. Please try again.');
@@ -62,11 +64,23 @@ const VerifyEmail = () => {
   };
 
   const handleResendCode = async () => {
+    if (!isLoaded) return;
+    
     try {
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       toast.success('New verification code sent! 📧');
     } catch (err) {
       toast.error('Failed to send code. Please try again.');
+    }
+  };
+
+  const handleBackToSignUp = () => {
+    // If signUp object exists, we can go back to complete the signup
+    if (signUp) {
+      navigate('/sign-up');
+    } else {
+      // If no signUp context, go to sign up page
+      navigate('/sign-up');
     }
   };
 
@@ -85,7 +99,7 @@ const VerifyEmail = () => {
             <div className="absolute inset-0 bg-black/10"></div>
             <div className="relative z-10">
               <button
-                onClick={() => navigate('/custom-sign-up')}
+                onClick={handleBackToSignUp}
                 className="absolute left-6 top-6 p-2 bg-white/20 hover:bg-white/30 rounded-2xl transition-all duration-200 backdrop-blur-sm"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -128,7 +142,7 @@ const VerifyEmail = () => {
               <div className="space-y-4">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || code.join('').length !== 6}
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-2xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all duration-200 flex items-center justify-center gap-3"
                 >
                   {loading ? (
@@ -147,7 +161,8 @@ const VerifyEmail = () => {
                 <button
                   type="button"
                   onClick={handleResendCode}
-                  className="w-full py-3 px-4 border-2 border-gray-300 dark:border-zinc-600 text-gray-700 dark:text-gray-300 bg-transparent rounded-2xl font-semibold hover:bg-gray-50 dark:hover:bg-zinc-700 transition-all duration-200 flex items-center justify-center gap-3"
+                  disabled={loading}
+                  className="w-full py-3 px-4 border-2 border-gray-300 dark:border-zinc-600 text-gray-700 dark:text-gray-300 bg-transparent rounded-2xl font-semibold hover:bg-gray-50 dark:hover:bg-zinc-700 transition-all duration-200 flex items-center justify-center gap-3 disabled:opacity-50"
                 >
                   <Mail className="w-5 h-5" />
                   Resend Code

@@ -21,8 +21,10 @@ export default function TasksSummary() {
         task.assignees?.some(assignee => assignee.user?.id === user.id)
     );
     
+    // 🆕 UPDATED: Overdue tasks exclude CANCELLED status
     const overdueTasks = tasks.filter(t => 
-        t.due_date && new Date(t.due_date) < new Date() && t.status !== 'DONE'
+        t.due_date && new Date(t.due_date) < new Date() && 
+        t.status !== 'DONE' && t.status !== 'CANCELLED'
     );
     
     const inProgressIssues = tasks.filter(i => i.status === 'IN_PROGRESS');
@@ -82,7 +84,7 @@ export default function TasksSummary() {
                                         </h4>
                                         <div className="flex items-center justify-between mt-1">
                                             <p className="text-xs text-gray-600 dark:text-zinc-400 capitalize">
-                                                {task.type} • {task.priority} priority
+                                                {task.type?.toLowerCase().replace('_', ' ')} • {task.priority} priority
                                             </p>
                                             {task.assignees && task.assignees.length > 0 && (
                                                 <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">

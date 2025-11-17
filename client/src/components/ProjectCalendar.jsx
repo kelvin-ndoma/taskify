@@ -2,12 +2,14 @@ import { useState } from "react";
 import { format, isSameDay, isBefore, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from "date-fns";
 import { CalendarIcon, Clock, User, ChevronLeft, ChevronRight } from "lucide-react";
 
+// 🆕 UPDATED: Type colors with new values
 const typeColors = {
-    BUG: "bg-red-200 text-red-800 dark:bg-red-500 dark:text-red-900",
-    FEATURE: "bg-blue-200 text-blue-800 dark:bg-blue-500 dark:text-blue-900",
-    TASK: "bg-green-200 text-green-800 dark:bg-green-500 dark:text-green-900",
-    IMPROVEMENT: "bg-purple-200 text-purple-800 dark:bg-purple-500 dark:text-purple-900",
-    OTHER: "bg-amber-200 text-amber-800 dark:bg-amber-500 dark:text-amber-900",
+    GENERAL_TASK: "bg-green-200 text-green-800 dark:bg-green-500 dark:text-green-900",
+    WEEKLY_EMAILS: "bg-blue-200 text-blue-800 dark:bg-blue-500 dark:text-blue-900",
+    CALENDARS: "bg-purple-200 text-purple-800 dark:bg-purple-500 dark:text-purple-900",
+    CLIENT: "bg-amber-200 text-amber-800 dark:bg-amber-500 dark:text-amber-900",
+    SOCIAL: "bg-pink-200 text-pink-800 dark:bg-pink-500 dark:text-pink-900",
+    OTHER: "bg-gray-200 text-gray-800 dark:bg-gray-500 dark:text-gray-900",
 };
 
 const priorityBorders = {
@@ -23,18 +25,19 @@ const ProjectCalendar = ({ tasks }) => {
     const today = new Date();
     const getTasksForDate = (date) => tasks.filter((task) => isSameDay(task.due_date, date));
 
+    // 🆕 UPDATED: Overdue excludes CANCELLED status
     const upcomingTasks = tasks
-        .filter((task) => task.due_date && !isBefore(task.due_date, today) && task.status !== "DONE")
+        .filter((task) => task.due_date && !isBefore(task.due_date, today) && task.status !== "DONE" && task.status !== "CANCELLED")
         .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
         .slice(0, 5);
 
-    const overdueTasks = tasks.filter((task) => task.due_date && isBefore(task.due_date, today) && task.status !== "DONE");
+    // 🆕 UPDATED: Overdue excludes CANCELLED status
+    const overdueTasks = tasks.filter((task) => task.due_date && isBefore(task.due_date, today) && task.status !== "DONE" && task.status !== "CANCELLED");
 
     const daysInMonth = eachDayOfInterval({
         start: startOfMonth(currentMonth),
         end: endOfMonth(currentMonth),
     });
-
 
     const handleMonthChange = (direction) => {
         setCurrentMonth((prev) => (direction === "next" ? addMonths(prev, 1) : subMonths(prev, 1)));
@@ -70,7 +73,8 @@ const ProjectCalendar = ({ tasks }) => {
                         {daysInMonth.map((day) => {
                             const dayTasks = getTasksForDate(day);
                             const isSelected = isSameDay(day, selectedDate);
-                            const hasOverdue = dayTasks.some((t) => t.status !== "DONE" && isBefore(t.due_date, today));
+                            // 🆕 UPDATED: Overdue excludes CANCELLED status
+                            const hasOverdue = dayTasks.some((t) => t.status !== "DONE" && t.status !== "CANCELLED" && isBefore(t.due_date, today));
 
                             return (
                                 <button
@@ -105,15 +109,15 @@ const ProjectCalendar = ({ tasks }) => {
                                     <div className="flex justify-between mb-2">
                                         <h4 className="text-zinc-900 dark:text-white font-medium">{task.title}</h4>
                                         <span className={`px-2 py-0.5 rounded text-xs ${typeColors[task.type]}`}>
-                                            {task.type}
+                                            {task.type?.replace('_', ' ')}
                                         </span>
                                     </div>
                                     <div className="flex justify-between text-xs text-zinc-600 dark:text-zinc-400">
                                         <span className="capitalize">{task.priority.toLowerCase()} priority</span>
-                                        {task.assignee && (
+                                        {task.assignees && task.assignees.length > 0 && (
                                             <span className="flex items-center gap-1">
                                                 <User className="w-3 h-3" />
-                                                {task.assignee.name}
+                                                {task.assignees.length} assignee{task.assignees.length !== 1 ? 's' : ''}
                                             </span>
                                         )}
                                     </div>
@@ -143,7 +147,7 @@ const ProjectCalendar = ({ tasks }) => {
                                     <div className="flex justify-between items-start text-sm">
                                         <span className="text-zinc-900 dark:text-white">{task.title}</span>
                                         <span className={`text-xs px-2 py-0.5 rounded ${typeColors[task.type]}`}>
-                                            {task.type}
+                                            {task.type?.replace('_', ' ')}
                                         </span>
                                     </div>
                                     <p className="text-xs text-zinc-600 dark:text-zinc-400">{format(task.due_date, "MMM d")}</p>
@@ -165,7 +169,7 @@ const ProjectCalendar = ({ tasks }) => {
                                     <div className="flex justify-between text-sm text-zinc-900 dark:text-white">
                                         <span>{task.title}</span>
                                         <span className="text-xs px-2 py-0.5 rounded bg-red-200 dark:bg-red-500 text-red-900 dark:text-red-900">
-                                            {task.type}
+                                            {task.type?.replace('_', ' ')}
                                         </span>
                                     </div>
                                     <p className="text-xs text-red-600 dark:text-red-300">

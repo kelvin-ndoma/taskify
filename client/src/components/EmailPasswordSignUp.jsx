@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { useSignUp } from '@clerk/clerk-react';
+import { useState, useEffect } from 'react';
+import { useSignUp, useClerk } from '@clerk/clerk-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Loader2Icon, Eye, EyeOff } from 'lucide-react';
 
-const EmailPasswordSignUp = () => {
+const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
     const { isLoaded, signUp, setActive } = useSignUp();
+    const { client } = useClerk();
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -16,7 +17,37 @@ const EmailPasswordSignUp = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [isInvitationFlow, setIsInvitationFlow] = useState(false);
     const navigate = useNavigate();
+
+    // Check if this is an invitation flow
+    useEffect(() => {
+        if (invitationToken || invitationCode) {
+            setIsInvitationFlow(true);
+            console.log('Invitation flow detected:', { invitationToken, invitationCode });
+        }
+    }, [invitationToken, invitationCode]);
+
+    // Pre-fill email from invitation if available
+    useEffect(() => {
+        const getInvitationDetails = async () => {
+            if (invitationToken && client) {
+                try {
+                    const invitation = await client.signUp.get();
+                    if (invitation.emailAddress) {
+                        setFormData(prev => ({
+                            ...prev,
+                            email: invitation.emailAddress
+                        }));
+                    }
+                } catch (error) {
+                    console.error('Error fetching invitation details:', error);
+                }
+            }
+        };
+        
+        getInvitationDetails();
+    }, [invitationToken, client]);
 
     const handleChange = (e) => {
         setFormData({
@@ -58,17 +89,51 @@ const EmailPasswordSignUp = () => {
 
         setLoading(true);
         try {
-            const result = await signUp.create({
-                emailAddress: formData.email,
-                password: formData.password,
-                firstName: formData.firstName.trim(),
-                lastName: formData.lastName.trim(),
-            });
+            let result;
+
+            if (isInvitationFlow && invitationToken) {
+                // Handle invitation acceptance flow
+                console.log('Processing invitation acceptance...');
+                
+                result = await signUp.create({
+                    emailAddress: formData.email,
+                    password: formData.password,
+                    firstName: formData.firstName.trim(),
+                    lastName: formData.lastName.trim(),
+                    strategy: 'invitation_link',
+                    ticket: invitationToken,
+                });
+            } else {
+                // Regular sign-up flow
+                result = await signUp.create({
+                    emailAddress: formData.email,
+                    password: formData.password,
+                    firstName: formData.firstName.trim(),
+                    lastName: formData.lastName.trim(),
+                });
+            }
+
+            console.log('Sign up result:', result);
 
             if (result.status === 'complete') {
                 await setActive({ session: result.createdSessionId });
-                toast.success('Account created successfully!');
+                
+                if (isInvitationFlow) {
+                    toast.success('Account created and invitation accepted!');
+                } else {
+                    toast.success('Account created successfully!');
+                }
+                
                 navigate('/');
+            } else if (result.status === 'missing_requirements') {
+                console.log('Sign up requires additional steps:', result);
+                
+                await signUp.prepareEmailAddressVerification({
+                    strategy: 'email_code',
+                });
+                
+                navigate('/verify-email');
+                toast.success('Verification code sent to your email!');
             } else {
                 console.error('Sign up incomplete:', result);
                 toast.error('Sign up failed. Please try again.');
@@ -79,6 +144,9 @@ const EmailPasswordSignUp = () => {
             
             if (errorMessage.includes('exists')) {
                 toast.error('An account with this email already exists. Please sign in.');
+                navigate('/sign-in');
+            } else if (errorMessage.includes('invitation')) {
+                toast.error('Invalid or expired invitation. Please request a new one.');
             } else {
                 toast.error(errorMessage);
             }
@@ -92,10 +160,13 @@ const EmailPasswordSignUp = () => {
             <div className="max-w-md w-full space-y-8">
                 <div className="text-center">
                     <h2 className="mt-6 text-3xl font-bold text-gray-900 dark:text-white">
-                        Create Account
+                        {isInvitationFlow ? 'Accept Invitation' : 'Create Account'}
                     </h2>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        Sign up to get started with your account
+                        {isInvitationFlow 
+                            ? 'Complete your profile to join the workspace' 
+                            : 'Sign up to get started with your account'
+                        }
                     </p>
                 </div>
                 
@@ -145,9 +216,15 @@ const EmailPasswordSignUp = () => {
                                 required
                                 value={formData.email}
                                 onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-zinc-800 dark:text-white"
+                                disabled={isInvitationFlow} // Email is pre-filled from invitation
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-zinc-800 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 placeholder="Enter your email"
                             />
+                            {isInvitationFlow && (
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Email is pre-filled from your invitation
+                                </p>
+                            )}
                         </div>
 
                         <div>
@@ -224,22 +301,24 @@ const EmailPasswordSignUp = () => {
                             {loading ? (
                                 <>
                                     <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
-                                    Creating account...
+                                    {isInvitationFlow ? 'Accepting invitation...' : 'Creating account...'}
                                 </>
                             ) : (
-                                'Create Account'
+                                isInvitationFlow ? 'Accept Invitation & Create Account' : 'Create Account'
                             )}
                         </button>
                     </div>
 
-                    <div className="text-center">
-                        <Link 
-                            to="/sign-in" 
-                            className="text-blue-600 hover:text-blue-500 text-sm"
-                        >
-                            Already have an account? Sign in
-                        </Link>
-                    </div>
+                    {!isInvitationFlow && (
+                        <div className="text-center">
+                            <Link 
+                                to="/sign-in" 
+                                className="text-blue-600 hover:text-blue-500 text-sm"
+                            >
+                                Already have an account? Sign in
+                            </Link>
+                        </div>
+                    )}
                 </form>
             </div>
         </div>

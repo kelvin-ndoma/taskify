@@ -1,20 +1,25 @@
 import { useEffect, useState } from 'react';
-import { GitCommit, MessageSquare, Clock, Bug, Zap, Square, Users } from "lucide-react";
+import { GitCommit, MessageSquare, Clock, Bug, Zap, Square, Users, Mail, Calendar, User, Heart, Circle } from "lucide-react";
 import { format } from "date-fns";
 import { useSelector } from "react-redux";
 
+// 🆕 UPDATED: Task type icons with new values
 const typeIcons = {
-    BUG: { icon: Bug, color: "text-red-500 dark:text-red-400" },
-    FEATURE: { icon: Zap, color: "text-blue-500 dark:text-blue-400" },
-    TASK: { icon: Square, color: "text-green-500 dark:text-green-400" },
-    IMPROVEMENT: { icon: MessageSquare, color: "text-amber-500 dark:text-amber-400" },
-    OTHER: { icon: GitCommit, color: "text-purple-500 dark:text-purple-400" },
+    GENERAL_TASK: { icon: Square, color: "text-green-500 dark:text-green-400" },
+    WEEKLY_EMAILS: { icon: Mail, color: "text-blue-500 dark:text-blue-400" },
+    CALENDARS: { icon: Calendar, color: "text-purple-500 dark:text-purple-400" },
+    CLIENT: { icon: User, color: "text-amber-500 dark:text-amber-400" },
+    SOCIAL: { icon: Heart, color: "text-pink-500 dark:text-pink-400" },
+    OTHER: { icon: Circle, color: "text-gray-500 dark:text-gray-400" },
 };
 
+// 🆕 UPDATED: Status colors with new values
 const statusColors = {
     TODO: "bg-zinc-200 text-zinc-800 dark:bg-zinc-600 dark:text-zinc-200",
     IN_PROGRESS: "bg-amber-200 text-amber-800 dark:bg-amber-500 dark:text-amber-900",
+    INTERNAL_REVIEW: "bg-purple-200 text-purple-800 dark:bg-purple-500 dark:text-purple-900",
     DONE: "bg-emerald-200 text-emerald-800 dark:bg-emerald-500 dark:text-emerald-900",
+    CANCELLED: "bg-red-200 text-red-800 dark:bg-red-500 dark:text-red-900",
 };
 
 const RecentActivity = () => {
@@ -63,11 +68,11 @@ const RecentActivity = () => {
                                                     {task.title}
                                                 </h4>
                                                 <span className={`ml-2 px-2 py-1 rounded text-xs ${statusColors[task.status] || "bg-zinc-300 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"}`}>
-                                                    {task.status.replace("_", " ")}
+                                                    {task.status?.toLowerCase().replace("_", " ")}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-                                                <span className="capitalize">{task.type.toLowerCase()}</span>
+                                                <span className="capitalize">{task.type?.toLowerCase().replace('_', ' ')}</span>
                                                 
                                                 {/* 🆕 Multiple Assignees */}
                                                 {task.assignees && task.assignees.length > 0 ? (

@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell }
 import { CheckCircle, Clock, AlertTriangle, Users, ArrowRightIcon } from "lucide-react";
 
 // Colors for charts and priorities
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 const PRIORITY_COLORS = {
     LOW: "text-red-600 bg-red-200 dark:text-red-500 dark:bg-red-600",
     MEDIUM: "text-blue-600 bg-blue-200 dark:text-blue-500 dark:bg-blue-600",
@@ -20,18 +20,39 @@ const ProjectAnalytics = ({ project, tasks }) => {
             completed: 0,
             inProgress: 0,
             todo: 0,
+            internalReview: 0,
             overdue: 0,
         };
 
-        const statusMap = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
-        const typeMap = { TASK: 0, BUG: 0, FEATURE: 0, IMPROVEMENT: 0, OTHER: 0 };
+        // 🆕 UPDATED: Status map with new values
+        const statusMap = { 
+            TODO: 0, 
+            IN_PROGRESS: 0, 
+            INTERNAL_REVIEW: 0, 
+            DONE: 0, 
+            CANCELLED: 0 
+        };
+        
+        // 🆕 UPDATED: Type map with new values
+        const typeMap = { 
+            GENERAL_TASK: 0, 
+            WEEKLY_EMAILS: 0, 
+            CALENDARS: 0, 
+            CLIENT: 0, 
+            SOCIAL: 0, 
+            OTHER: 0 
+        };
+        
         const priorityMap = { LOW: 0, MEDIUM: 0, HIGH: 0 };
 
         tasks.forEach((t) => {
             if (t.status === "DONE") stats.completed++;
             if (t.status === "IN_PROGRESS") stats.inProgress++;
             if (t.status === "TODO") stats.todo++;
-            if (new Date(t.due_date) < now && t.status !== "DONE") stats.overdue++;
+            if (t.status === "INTERNAL_REVIEW") stats.internalReview++;
+            
+            // 🆕 UPDATED: Overdue excludes CANCELLED status
+            if (new Date(t.due_date) < now && t.status !== "DONE" && t.status !== "CANCELLED") stats.overdue++;
 
             if (statusMap[t.status] !== undefined) statusMap[t.status]++;
             if (typeMap[t.type] !== undefined) typeMap[t.type]++;
@@ -40,8 +61,16 @@ const ProjectAnalytics = ({ project, tasks }) => {
 
         return {
             stats,
-            statusData: Object.entries(statusMap).map(([k, v]) => ({ name: k.replace("_", " "), value: v })),
-            typeData: Object.entries(typeMap).filter(([_, v]) => v > 0).map(([k, v]) => ({ name: k, value: v })),
+            statusData: Object.entries(statusMap).map(([k, v]) => ({ 
+                name: k.replace("_", " "), 
+                value: v 
+            })),
+            typeData: Object.entries(typeMap)
+                .filter(([_, v]) => v > 0)
+                .map(([k, v]) => ({ 
+                    name: k.replace("_", " "), 
+                    value: v 
+                })),
             priorityData: Object.entries(priorityMap).map(([k, v]) => ({
                 name: k,
                 value: v,

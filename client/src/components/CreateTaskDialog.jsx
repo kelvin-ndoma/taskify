@@ -20,10 +20,10 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
     const [formData, setFormData] = useState({
         title: "",
         description: "",
-        type: "TASK",
+        type: "GENERAL_TASK", // 🆕 UPDATED: New default
         status: "TODO",
         priority: "MEDIUM",
-        assignees: [], // 🆕 Changed from assigneeId to assignees array
+        assignees: [],
         due_date: "",
     });
 
@@ -78,10 +78,10 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
             setFormData({
                 title: "",
                 description: "",
-                type: "TASK",
+                type: "GENERAL_TASK", // 🆕 UPDATED: Reset to new default
                 status: "TODO",
                 priority: "MEDIUM",
-                assignees: [], // 🆕 Reset to empty array
+                assignees: [],
                 due_date: "",
             });
             
@@ -101,7 +101,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         setFormData({
             title: "",
             description: "",
-            type: "TASK",
+            type: "GENERAL_TASK", // 🆕 UPDATED: Reset to new default
             status: "TODO",
             priority: "MEDIUM",
             assignees: [],
@@ -152,10 +152,12 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                                 onChange={(e) => setFormData({ ...formData, type: e.target.value })} 
                                 className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             >
-                                <option value="BUG">Bug</option>
-                                <option value="FEATURE">Feature</option>
-                                <option value="TASK">Task</option>
-                                <option value="IMPROVEMENT">Improvement</option>
+                                {/* 🆕 UPDATED: New task types */}
+                                <option value="GENERAL_TASK">General Task</option>
+                                <option value="WEEKLY_EMAILS">Weekly Emails</option>
+                                <option value="CALENDARS">Calendars</option>
+                                <option value="CLIENT">Client</option>
+                                <option value="SOCIAL">Social</option>
                                 <option value="OTHER">Other</option>
                             </select>
                         </div>
@@ -238,9 +240,12 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                             onChange={(e) => setFormData({ ...formData, status: e.target.value })} 
                             className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                         >
+                            {/* 🆕 UPDATED: New status options */}
                             <option value="TODO">To Do</option>
                             <option value="IN_PROGRESS">In Progress</option>
+                            <option value="INTERNAL_REVIEW">Internal Review</option>
                             <option value="DONE">Done</option>
+                            <option value="CANCELLED">Cancelled</option>
                         </select>
                     </div>
 

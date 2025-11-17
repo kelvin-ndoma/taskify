@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 import { Toaster } from "react-hot-toast";
 import Layout from "./pages/Layout";
@@ -11,6 +11,20 @@ import { Loader2Icon } from 'lucide-react';
 import EmailPasswordSignIn from "./components/EmailPasswordSignIn";
 import EmailPasswordSignUp from "./components/EmailPasswordSignUp";
 import ForgotPassword from "./components/ForgotPassword";
+import VerifyEmail from "./components/VerifyEmail";
+import ResetPassword from "./components/ResetPassword";
+
+// Create a wrapper component for the sign-up that handles invitation context
+const SignUpWithInvitation = () => {
+  const [searchParams] = useSearchParams();
+  const invitationToken = searchParams.get('__clerk_ticket');
+  const invitationCode = searchParams.get('__clerk_invitation_token');
+  
+  return <EmailPasswordSignUp 
+    invitationToken={invitationToken}
+    invitationCode={invitationCode}
+  />;
+};
 
 const App = () => {
     const { isLoaded, isSignedIn } = useAuth();
@@ -26,12 +40,37 @@ const App = () => {
 
     return (
         <>
-            <Toaster />
+            <Toaster 
+                position="top-center"
+                toastOptions={{
+                    duration: 4000,
+                    style: {
+                        background: '#363636',
+                        color: '#fff',
+                    },
+                    success: {
+                        duration: 3000,
+                        iconTheme: {
+                            primary: '#10B981',
+                            secondary: '#fff',
+                        },
+                    },
+                    error: {
+                        duration: 5000,
+                        iconTheme: {
+                            primary: '#EF4444',
+                            secondary: '#fff',
+                        },
+                    },
+                }}
+            />
             <Routes>
                 {/* Public routes for authentication */}
                 <Route path="/sign-in" element={<EmailPasswordSignIn />} />
-                <Route path="/sign-up" element={<EmailPasswordSignUp />} />
+                <Route path="/sign-up" element={<SignUpWithInvitation />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 
                 {/* Protected routes */}
                 {isSignedIn ? (

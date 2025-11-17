@@ -42,6 +42,23 @@ export default function ProjectDetail() {
         CANCELLED: "bg-red-200 text-red-900 dark:bg-red-500 dark:text-red-900",
     };
 
+    // 🆕 UPDATED: Correct task counting with new statuses
+    const getTaskCounts = () => {
+        return {
+            total: tasks.length,
+            completed: tasks.filter((t) => t.status === "DONE").length,
+            todo: tasks.filter((t) => t.status === "TODO").length,
+            inProgress: tasks.filter((t) => t.status === "IN_PROGRESS").length,
+            internalReview: tasks.filter((t) => t.status === "INTERNAL_REVIEW").length,
+            cancelled: tasks.filter((t) => t.status === "CANCELLED").length,
+            inProgressAndTodo: tasks.filter((t) => 
+                t.status === "IN_PROGRESS" || t.status === "TODO" || t.status === "INTERNAL_REVIEW"
+            ).length
+        };
+    };
+
+    const taskCounts = getTaskCounts();
+
     if (!project) {
         return (
             <div className="p-6 text-center text-zinc-900 dark:text-zinc-200">
@@ -74,13 +91,15 @@ export default function ProjectDetail() {
                 </button>
             </div>
 
-            {/* Info Cards */}
+            {/* Info Cards - UPDATED */}
             <div className="grid grid-cols-2 sm:flex flex-wrap gap-6">
                 {[
-                    { label: "Total Tasks", value: tasks.length, color: "text-zinc-900 dark:text-white" },
-                    { label: "Completed", value: tasks.filter((t) => t.status === "DONE").length, color: "text-emerald-700 dark:text-emerald-400" },
-                    { label: "In Progress", value: tasks.filter((t) => t.status === "IN_PROGRESS" || t.status === "TODO").length, color: "text-amber-700 dark:text-amber-400" },
-                    { label: "Team Members", value: project.members?.length || 0, color: "text-blue-700 dark:text-blue-400" },
+                    { label: "Total Tasks", value: taskCounts.total, color: "text-zinc-900 dark:text-white" },
+                    { label: "Completed", value: taskCounts.completed, color: "text-emerald-700 dark:text-emerald-400" },
+                    { label: "In Progress", value: taskCounts.inProgress, color: "text-amber-700 dark:text-amber-400" },
+                    { label: "To Do", value: taskCounts.todo, color: "text-blue-700 dark:text-blue-400" },
+                    { label: "Internal Review", value: taskCounts.internalReview, color: "text-purple-700 dark:text-purple-400" },
+                    { label: "Team Members", value: project.members?.length || 0, color: "text-indigo-700 dark:text-indigo-400" },
                 ].map((card, idx) => (
                     <div key={idx} className=" dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 flex justify-between sm:min-w-60 p-4 py-2.5 rounded">
                         <div>

@@ -67,12 +67,12 @@ export default function StatsGrid() {
                 return task.assignees?.some(assignee => assignee.user?.id === user.id);
             }).length;
 
-            // Calculate overdue tasks (due date passed and not completed)
+            // 🆕 UPDATED: Calculate overdue tasks (due date passed and not completed/cancelled)
             const overdueTasks = allTasks.filter(task => {
                 if (!task.due_date) return false;
                 const dueDate = new Date(task.due_date);
                 const isOverdue = dueDate < now;
-                const isNotCompleted = task.status !== 'DONE';
+                const isNotCompleted = task.status !== 'DONE' && task.status !== 'CANCELLED';
                 return isOverdue && isNotCompleted;
             }).length;
 

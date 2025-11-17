@@ -518,6 +518,7 @@ const TaskDetails = () => {
               <div className="flex flex-wrap gap-2 mt-2">
                 {isEditingTask ? (
                   <>
+                    {/* UPDATED: Task Status Options */}
                     <select
                       value={editingTaskData.status}
                       onChange={(e) => setEditingTaskData(prev => ({ ...prev, status: e.target.value }))}
@@ -525,18 +526,25 @@ const TaskDetails = () => {
                     >
                       <option value="TODO">To Do</option>
                       <option value="IN_PROGRESS">In Progress</option>
+                      <option value="INTERNAL_REVIEW">Internal Review</option>
                       <option value="DONE">Done</option>
+                      <option value="CANCELLED">Cancelled</option>
                     </select>
+                    
+                    {/* UPDATED: Task Type Options */}
                     <select
                       value={editingTaskData.type}
                       onChange={(e) => setEditingTaskData(prev => ({ ...prev, type: e.target.value }))}
                       className="px-2 py-0.5 rounded text-xs border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
                     >
-                      <option value="TASK">Task</option>
-                      <option value="BUG">Bug</option>
-                      <option value="FEATURE">Feature</option>
-                      <option value="IMPROVEMENT">Improvement</option>
+                      <option value="GENERAL_TASK">General Task</option>
+                      <option value="WEEKLY_EMAILS">Weekly Emails</option>
+                      <option value="CALENDARS">Calendars</option>
+                      <option value="CLIENT">Client</option>
+                      <option value="SOCIAL">Social</option>
+                      <option value="OTHER">Other</option>
                     </select>
+                    
                     <select
                       value={editingTaskData.priority}
                       onChange={(e) => setEditingTaskData(prev => ({ ...prev, priority: e.target.value }))}
@@ -553,7 +561,7 @@ const TaskDetails = () => {
                       {task.status?.toLowerCase().replace('_', ' ')}
                     </span>
                     <span className="px-2 py-0.5 rounded bg-blue-200 dark:bg-blue-900 text-blue-900 dark:text-blue-300 text-xs capitalize">
-                      {task.type?.toLowerCase()}
+                      {task.type?.toLowerCase().replace('_', ' ')}
                     </span>
                     <span className="px-2 py-0.5 rounded bg-green-200 dark:bg-emerald-900 text-green-900 dark:text-emerald-300 text-xs capitalize">
                       {task.priority?.toLowerCase()}

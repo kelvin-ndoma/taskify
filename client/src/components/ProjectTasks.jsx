@@ -5,16 +5,18 @@ import { useDispatch } from "react-redux";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { deleteTask, updateTask } from "../features/workspaceSlice";
-import { Bug, CalendarIcon, GitCommit, MessageSquare, Square, Trash, XIcon, Zap, Users } from "lucide-react";
+import { CalendarIcon, Trash, XIcon, Users, Mail, User, Heart, Circle, Square } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
 import api from "../configs/api";
 
+// 🆕 UPDATED: Type icons with new values
 const typeIcons = {
-    BUG: { icon: Bug, color: "text-red-600 dark:text-red-400" },
-    FEATURE: { icon: Zap, color: "text-blue-600 dark:text-blue-400" },
-    TASK: { icon: Square, color: "text-green-600 dark:text-green-400" },
-    IMPROVEMENT: { icon: GitCommit, color: "text-purple-600 dark:text-purple-400" },
-    OTHER: { icon: MessageSquare, color: "text-amber-600 dark:text-amber-400" },
+    GENERAL_TASK: { icon: Square, color: "text-green-600 dark:text-green-400" },
+    WEEKLY_EMAILS: { icon: Mail, color: "text-blue-600 dark:text-blue-400" },
+    CALENDARS: { icon: CalendarIcon, color: "text-purple-600 dark:text-purple-400" },
+    CLIENT: { icon: User, color: "text-amber-600 dark:text-amber-400" },
+    SOCIAL: { icon: Heart, color: "text-pink-600 dark:text-pink-400" },
+    OTHER: { icon: Circle, color: "text-gray-600 dark:text-gray-400" },
 };
 
 const priorityTexts = {
@@ -210,14 +212,17 @@ const ProjectTasks = ({ tasks }) => {
                             { label: "All Statuses", value: "" },
                             { label: "To Do", value: "TODO" },
                             { label: "In Progress", value: "IN_PROGRESS" },
+                            { label: "Internal Review", value: "INTERNAL_REVIEW" }, // 🆕 ADDED
                             { label: "Done", value: "DONE" },
+                            { label: "Cancelled", value: "CANCELLED" }, // 🆕 ADDED
                         ],
                         type: [
                             { label: "All Types", value: "" },
-                            { label: "Task", value: "TASK" },
-                            { label: "Bug", value: "BUG" },
-                            { label: "Feature", value: "FEATURE" },
-                            { label: "Improvement", value: "IMPROVEMENT" },
+                            { label: "General Task", value: "GENERAL_TASK" }, // 🆕 UPDATED
+                            { label: "Weekly Emails", value: "WEEKLY_EMAILS" }, // 🆕 UPDATED
+                            { label: "Calendars", value: "CALENDARS" }, // 🆕 UPDATED
+                            { label: "Client", value: "CLIENT" }, // 🆕 UPDATED
+                            { label: "Social", value: "SOCIAL" }, // 🆕 UPDATED
                             { label: "Other", value: "OTHER" },
                         ],
                         priority: [
@@ -321,7 +326,9 @@ const ProjectTasks = ({ tasks }) => {
                                                 <td className="px-4 py-2">
                                                     <div className="flex items-center gap-2">
                                                         {Icon && <Icon className={`size-4 ${color}`} />}
-                                                        <span className={`uppercase text-xs ${color}`}>{task.type}</span>
+                                                        <span className={`uppercase text-xs ${color}`}>
+                                                            {task.type?.replace('_', ' ')}
+                                                        </span>
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-2">
@@ -336,9 +343,12 @@ const ProjectTasks = ({ tasks }) => {
                                                         value={task.status} 
                                                         className="group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer" 
                                                     >
+                                                        {/* 🆕 UPDATED: Status options */}
                                                         <option value="TODO">To Do</option>
                                                         <option value="IN_PROGRESS">In Progress</option>
+                                                        <option value="INTERNAL_REVIEW">Internal Review</option>
                                                         <option value="DONE">Done</option>
+                                                        <option value="CANCELLED">Cancelled</option>
                                                     </select>
                                                 </td>
                                                 <td className="px-4 py-2">
@@ -392,7 +402,9 @@ const ProjectTasks = ({ tasks }) => {
                                         <div className="flex items-center justify-between">
                                             <div className="text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
                                                 {Icon && <Icon className={`size-4 ${color}`} />}
-                                                <span className={`${color} uppercase`}>{task.type}</span>
+                                                <span className={`${color} uppercase`}>
+                                                    {task.type?.replace('_', ' ')}
+                                                </span>
                                             </div>
                                             <span className={`text-xs px-2 py-1 rounded ${background} ${prioritycolor}`}>
                                                 {task.priority}
@@ -407,9 +419,12 @@ const ProjectTasks = ({ tasks }) => {
                                                 value={task.status} 
                                                 className="w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" 
                                             >
+                                                {/* 🆕 UPDATED: Status options */}
                                                 <option value="TODO">To Do</option>
                                                 <option value="IN_PROGRESS">In Progress</option>
+                                                <option value="INTERNAL_REVIEW">Internal Review</option>
                                                 <option value="DONE">Done</option>
+                                                <option value="CANCELLED">Cancelled</option>
                                             </select>
                                         </div>
 

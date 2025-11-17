@@ -19,8 +19,12 @@ function MyTasksSidebar() {
                 return 'bg-green-500';
             case 'IN_PROGRESS':
                 return 'bg-yellow-500';
+            case 'INTERNAL_REVIEW': // 🆕 ADDED: New status
+                return 'bg-purple-500';
             case 'TODO':
                 return 'bg-gray-500 dark:bg-zinc-500';
+            case 'CANCELLED': // 🆕 ADDED: New status
+                return 'bg-red-500';
             default:
                 return 'bg-gray-400 dark:bg-zinc-400';
         }
@@ -83,7 +87,7 @@ function MyTasksSidebar() {
                                             </p>
                                             <div className="flex items-center justify-between mt-1">
                                                 <p className="text-xs text-gray-500 dark:text-zinc-500 lowercase">
-                                                    {task.status.replace('_', ' ')}
+                                                    {task.status?.toLowerCase().replace('_', ' ')}
                                                 </p>
                                                 {task.assignees && task.assignees.length > 1 && (
                                                     <Users className="w-3 h-3 text-gray-400 dark:text-zinc-600" />
