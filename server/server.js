@@ -1,3 +1,4 @@
+// In your server file
 import express from 'express';
 import 'dotenv/config';
 import cors from 'cors';
@@ -12,13 +13,20 @@ import { protect } from './middlewares/authMiddleware.js';
 
 const app = express();
 
-// ✅ FIXED CORS Configuration
+// ✅ UPDATED CORS Configuration - Add your production domain
 app.use(cors({
-    origin: ['http://127.0.0.1:5173', 'http://localhost:5173'],
+    origin: [
+        'https://tbb-project-management.vercel.app', // Your production frontend
+        'http://127.0.0.1:5173', 
+        'http://localhost:5173'
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept']
 }));
+
+// Handle preflight requests explicitly
+app.options('*', cors());
 
 app.use(express.json());
 app.use(clerkMiddleware());
@@ -29,7 +37,7 @@ app.get('/', (req, res) => res.send('✅ Server is Live!'));
 // ✅ Inngest webhook route
 app.use('/api/inngest', serve({ client: inngest, functions }));
 
-// ✅ FIXED: Mount routes at /api/workspaces (plural) to match your frontend
+// ✅ Mount routes
 app.use('/api/workspaces', protect, workspaceRouter);
 app.use('/api/projects', protect, projectRouter);
 app.use('/api/tasks', protect, taskRouter);
