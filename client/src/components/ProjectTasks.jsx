@@ -202,6 +202,12 @@ const ProjectTasks = ({ tasks }) => {
         );
     };
 
+    // 🆕 FIXED: Custom select classes for proper dark mode visibility
+    const selectClasses = "border bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 outline-none px-3 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 appearance-none cursor-pointer";
+    
+    // 🆕 FIXED: Status select classes
+    const statusSelectClasses = "bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 outline-none px-2 pr-8 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer appearance-none";
+
     return (
         <div>
             {/* Filters */}
@@ -212,17 +218,17 @@ const ProjectTasks = ({ tasks }) => {
                             { label: "All Statuses", value: "" },
                             { label: "To Do", value: "TODO" },
                             { label: "In Progress", value: "IN_PROGRESS" },
-                            { label: "Internal Review", value: "INTERNAL_REVIEW" }, // 🆕 ADDED
+                            { label: "Internal Review", value: "INTERNAL_REVIEW" },
                             { label: "Done", value: "DONE" },
-                            { label: "Cancelled", value: "CANCELLED" }, // 🆕 ADDED
+                            { label: "Cancelled", value: "CANCELLED" },
                         ],
                         type: [
                             { label: "All Types", value: "" },
-                            { label: "General Task", value: "GENERAL_TASK" }, // 🆕 UPDATED
-                            { label: "Weekly Emails", value: "WEEKLY_EMAILS" }, // 🆕 UPDATED
-                            { label: "Calendars", value: "CALENDARS" }, // 🆕 UPDATED
-                            { label: "Client", value: "CLIENT" }, // 🆕 UPDATED
-                            { label: "Social", value: "SOCIAL" }, // 🆕 UPDATED
+                            { label: "General Task", value: "GENERAL_TASK" },
+                            { label: "Weekly Emails", value: "WEEKLY_EMAILS" },
+                            { label: "Calendars", value: "CALENDARS" },
+                            { label: "Client", value: "CLIENT" },
+                            { label: "Social", value: "SOCIAL" },
                             { label: "Other", value: "OTHER" },
                         ],
                         priority: [
@@ -237,16 +243,24 @@ const ProjectTasks = ({ tasks }) => {
                         ],
                     };
                     return (
-                        <select 
-                            key={name} 
-                            name={name} 
-                            onChange={handleFilterChange} 
-                            className="border bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 outline-none px-3 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" 
-                        >
-                            {options[name].map((opt, idx) => (
-                                <option key={idx} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
+                        <div key={name} className="relative">
+                            <select 
+                                name={name} 
+                                onChange={handleFilterChange}
+                                className={selectClasses}
+                                style={{
+                                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                                    backgroundPosition: 'right 0.5rem center',
+                                    backgroundRepeat: 'no-repeat',
+                                    backgroundSize: '1.5em 1.5em',
+                                    paddingRight: '2.5rem'
+                                }}
+                            >
+                                {options[name].map((opt, idx) => (
+                                    <option key={idx} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </div>
                     );
                 })}
 
@@ -341,9 +355,14 @@ const ProjectTasks = ({ tasks }) => {
                                                         name="status" 
                                                         onChange={(e) => handleStatusChange(task.id, e.target.value)} 
                                                         value={task.status} 
-                                                        className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 group-hover:ring-1 group-hover:ring-zinc-200 dark:group-hover:ring-zinc-700 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer" 
+                                                        className={statusSelectClasses}
+                                                        style={{
+                                                            backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                                                            backgroundPosition: 'right 0.5rem center',
+                                                            backgroundRepeat: 'no-repeat',
+                                                            backgroundSize: '1.5em 1.5em'
+                                                        }}
                                                     >
-                                                        {/* 🆕 UPDATED: Status options */}
                                                         <option value="TODO">To Do</option>
                                                         <option value="IN_PROGRESS">In Progress</option>
                                                         <option value="INTERNAL_REVIEW">Internal Review</option>
@@ -417,9 +436,15 @@ const ProjectTasks = ({ tasks }) => {
                                                 name="status" 
                                                 onChange={(e) => handleStatusChange(task.id, e.target.value)} 
                                                 value={task.status} 
-                                                className="w-full mt-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" 
+                                                className="w-full mt-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 appearance-none cursor-pointer"
+                                                style={{
+                                                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                                                    backgroundPosition: 'right 0.5rem center',
+                                                    backgroundRepeat: 'no-repeat',
+                                                    backgroundSize: '1.5em 1.5em',
+                                                    paddingRight: '2.5rem'
+                                                }}
                                             >
-                                                {/* 🆕 UPDATED: Status options */}
                                                 <option value="TODO">To Do</option>
                                                 <option value="IN_PROGRESS">In Progress</option>
                                                 <option value="INTERNAL_REVIEW">Internal Review</option>

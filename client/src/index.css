@@ -56,6 +56,7 @@
         cursor: pointer;
         width: 1rem;
         height: 1rem;
+        position: relative;
     }
 
     .dark input[type="checkbox"] {
@@ -65,4 +66,60 @@
     input[type="checkbox"]:checked {
         background-color: #3b82f6;
     }
+
+    /* 🆕 Improved checkbox checked state with checkmark */
+    input[type="checkbox"]:checked::before {
+        content: "✓";
+        position: absolute;
+        color: white;
+        font-size: 0.75rem;
+        font-weight: bold;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+}
+
+/* Ensure dropdown text is visible in both modes */
+select option {
+    background-color: white;
+    color: #1f2937;
+}
+
+.dark select option {
+    background-color: #18181b;
+    color: #d4d4d8;
+}
+
+/* Custom dropdown arrow styling */
+select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+    appearance: none; /* 🆕 Ensure consistent appearance */
+}
+
+.dark select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+}
+
+/* 🆕 Additional improvements for better dark mode support */
+select:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.dark select:focus {
+    outline: 2px solid #60a5fa;
+}
+
+/* 🆕 Ensure date inputs have consistent styling */
+input[type="date"] {
+    appearance: none;
+}
+
+.dark input[type="date"] {
+    color-scheme: dark;
 }
