@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar as CalendarIcon, XIcon, Users } from "lucide-react";
+import { Calendar as CalendarIcon, XIcon, Users, LinkIcon, PlusIcon, PaperclipIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { format } from "date-fns";
 import { useAuth } from "@clerk/clerk-react";
@@ -20,12 +20,18 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
     const [formData, setFormData] = useState({
         title: "",
         description: "",
-        type: "GENERAL_TASK", // 🆕 UPDATED: New default
+        type: "GENERAL_TASK",
         status: "TODO",
         priority: "MEDIUM",
         assignees: [],
         due_date: "",
     });
+
+    // 🆕 NEW: State for task links (url + title)
+    const [taskLinks, setTaskLinks] = useState([]);
+    const [showLinkInput, setShowLinkInput] = useState(false);
+    const [linkUrl, setLinkUrl] = useState("");
+    const [linkTitle, setLinkTitle] = useState("");
 
     // 🆕 Add assignee to the array
     const addAssignee = (userId) => {
@@ -50,6 +56,103 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         return teamMembers.find(member => member.user.id === userId)?.user;
     };
 
+    // 🆕 NEW: Add task link
+    const addTaskLink = () => {
+        if (!linkUrl.trim()) {
+            toast.error("Please enter a valid URL");
+            return;
+        }
+
+        // Basic URL validation
+        let formattedUrl = linkUrl.trim();
+        if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+            formattedUrl = 'https://' + formattedUrl;
+        }
+
+        try {
+            new URL(formattedUrl); // Validate URL
+            
+            const newLink = {
+                url: formattedUrl,
+                title: linkTitle.trim() || "", // Title is optional for task links
+                id: Date.now().toString() // temporary ID for frontend
+            };
+
+            setTaskLinks(prev => [...prev, newLink]);
+            setLinkUrl("");
+            setLinkTitle("");
+            setShowLinkInput(false);
+            toast.success("Link added successfully!");
+        } catch (error) {
+            toast.error("Please enter a valid URL");
+        }
+    };
+
+    // 🆕 NEW: Remove task link
+    const removeTaskLink = (linkId) => {
+        setTaskLinks(prev => prev.filter(link => link.id !== linkId));
+    };
+
+    // 🆕 NEW: Link Preview Component
+    const LinkPreview = ({ link, onRemove }) => {
+        const getDomainFromUrl = (url) => {
+            try {
+                return new URL(url).hostname.replace('www.', '');
+            } catch {
+                return url;
+            }
+        };
+
+        const getFaviconUrl = (url) => {
+            try {
+                const domain = new URL(url).hostname;
+                return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+            } catch {
+                return null;
+            }
+        };
+
+        const faviconUrl = getFaviconUrl(link.url);
+        const domain = getDomainFromUrl(link.url);
+
+        return (
+            <div className="flex items-center justify-between p-3 border border-gray-200 dark:border-zinc-700 rounded-lg bg-gray-50 dark:bg-zinc-800/50">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex-shrink-0">
+                        {faviconUrl ? (
+                            <img 
+                                src={faviconUrl} 
+                                alt="" 
+                                className="size-6 rounded"
+                            />
+                        ) : (
+                            <div className="size-6 bg-blue-500 rounded flex items-center justify-center">
+                                <LinkIcon className="size-3 text-white" />
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-zinc-100 truncate">
+                            {link.title || domain}
+                        </h4>
+                        <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
+                            {link.url}
+                        </p>
+                    </div>
+                </div>
+                
+                <button
+                    type="button"
+                    onClick={() => onRemove(link.id)}
+                    className="flex-shrink-0 p-1 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                >
+                    <XIcon className="size-4" />
+                </button>
+            </div>
+        );
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         
@@ -62,10 +165,18 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         
         try {
             const token = await getToken();
+            
+            // 🆕 Prepare links data for backend
+            const linksData = taskLinks.map(link => ({
+                url: link.url,
+                title: link.title || null // Send null if no title
+            }));
+
             const { data } = await api.post(
                 '/api/tasks', 
                 { 
                     ...formData, 
+                    links: linksData, // 🆕 NEW: Include links in request
                     workspaceId: currentWorkspace.id, 
                     projectId 
                 }, 
@@ -78,12 +189,17 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
             setFormData({
                 title: "",
                 description: "",
-                type: "GENERAL_TASK", // 🆕 UPDATED: Reset to new default
+                type: "GENERAL_TASK",
                 status: "TODO",
                 priority: "MEDIUM",
                 assignees: [],
                 due_date: "",
             });
+            // 🆕 NEW: Reset links state
+            setTaskLinks([]);
+            setLinkUrl("");
+            setLinkTitle("");
+            setShowLinkInput(false);
             
             toast.success(data.message || "Task created successfully!");
             dispatch(addTask(data.task));
@@ -101,12 +217,17 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         setFormData({
             title: "",
             description: "",
-            type: "GENERAL_TASK", // 🆕 UPDATED: Reset to new default
+            type: "GENERAL_TASK",
             status: "TODO",
             priority: "MEDIUM",
             assignees: [],
             due_date: "",
         });
+        // 🆕 NEW: Reset links state
+        setTaskLinks([]);
+        setLinkUrl("");
+        setLinkTitle("");
+        setShowLinkInput(false);
     };
 
     // 🆕 Filter out already selected members
@@ -143,6 +264,75 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                         />
                     </div>
 
+                    {/* 🆕 NEW: Task Links Section */}
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <PaperclipIcon className="size-4" />
+                                Attach Links
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => setShowLinkInput(!showLinkInput)}
+                                className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                            >
+                                <PlusIcon className="size-3" />
+                                {showLinkInput ? "Cancel" : "Add Link"}
+                            </button>
+                        </div>
+
+                        {/* Link Input Form */}
+                        {showLinkInput && (
+                            <div className="space-y-2 p-3 border border-gray-200 dark:border-zinc-700 rounded-lg bg-gray-50 dark:bg-zinc-800/50">
+                                <div className="space-y-2">
+                                    <input
+                                        type="url"
+                                        value={linkUrl}
+                                        onChange={(e) => setLinkUrl(e.target.value)}
+                                        placeholder="https://example.com"
+                                        className="w-full rounded dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={linkTitle}
+                                        onChange={(e) => setLinkTitle(e.target.value)}
+                                        placeholder="Link title (optional)"
+                                        className="w-full rounded dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={addTaskLink}
+                                        disabled={!linkUrl.trim()}
+                                        className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <PaperclipIcon className="size-3" />
+                                        Attach Link
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Links Preview */}
+                        {taskLinks.length > 0 && (
+                            <div className="space-y-2">
+                                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                                    {taskLinks.length} link(s) attached to this task
+                                </p>
+                                <div className="space-y-2 max-h-32 overflow-y-auto">
+                                    {taskLinks.map((link) => (
+                                        <LinkPreview
+                                            key={link.id}
+                                            link={link}
+                                            onRemove={removeTaskLink}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Type & Priority */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
@@ -152,7 +342,6 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                                 onChange={(e) => setFormData({ ...formData, type: e.target.value })} 
                                 className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             >
-                                {/* 🆕 UPDATED: New task types */}
                                 <option value="GENERAL_TASK">General Task</option>
                                 <option value="WEEKLY_EMAILS">Weekly Emails</option>
                                 <option value="CALENDARS">Calendars</option>
@@ -176,7 +365,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                         </div>
                     </div>
 
-                    {/* 🆕 Multiple Assignees */}
+                    {/* Multiple Assignees */}
                     <div className="space-y-1">
                         <label className="text-sm font-medium flex items-center gap-2">
                             <Users className="size-4" /> Assignees
@@ -240,7 +429,6 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                             onChange={(e) => setFormData({ ...formData, status: e.target.value })} 
                             className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                         >
-                            {/* 🆕 UPDATED: New status options */}
                             <option value="TODO">To Do</option>
                             <option value="IN_PROGRESS">In Progress</option>
                             <option value="INTERNAL_REVIEW">Internal Review</option>

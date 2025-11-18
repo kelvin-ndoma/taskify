@@ -12,11 +12,12 @@ export const createTask = async (req, res) => {
       projectId,
       title,
       description,
-      type = "GENERAL_TASK", // Updated default
-      status = "TODO", // Updated default
+      type = "GENERAL_TASK",
+      status = "TODO",
       priority = "MEDIUM",
       assignees = [],
       due_date,
+      links = [], // 🆕 NEW: Array of { url, title } objects for task links
     } = req.body;
 
     // Validate required fields
@@ -97,6 +98,20 @@ export const createTask = async (req, res) => {
       }
     }
 
+    // 🆕 NEW: Validate links
+    if (links && Array.isArray(links)) {
+      for (const link of links) {
+        if (!link.url) {
+          return res.status(400).json({ message: "Link URL is required for all links." });
+        }
+        try {
+          new URL(link.url); // Validate URL format
+        } catch (error) {
+          return res.status(400).json({ message: `Invalid URL: ${link.url}` });
+        }
+      }
+    }
+
     // Create task with transaction
     const result = await prisma.$transaction(async (tx) => {
       // Create the task
@@ -122,7 +137,19 @@ export const createTask = async (req, res) => {
         });
       }
 
-      // Return task with full details
+      // 🆕 NEW: Create task links if provided
+      if (links && links.length > 0) {
+        await tx.taskLink.createMany({
+          data: links.map((link) => ({
+            url: link.url,
+            title: link.title || null,
+            taskId: task.id,
+            userId: userId,
+          })),
+        });
+      }
+
+      // Return task with full details including links
       return await tx.task.findUnique({
         where: { id: task.id },
         include: {
@@ -133,6 +160,17 @@ export const createTask = async (req, res) => {
                   id: true,
                   name: true,
                   email: true,
+                  image: true,
+                },
+              },
+            },
+          },
+          links: { // 🆕 NEW: Include task links
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
                   image: true,
                 },
               },
@@ -153,7 +191,7 @@ export const createTask = async (req, res) => {
       });
     });
 
-    console.log(`✅ Task created: ${result.id} with ${result.assignees.length} assignees`);
+    console.log(`✅ Task created: ${result.id} with ${result.assignees.length} assignees and ${result.links.length} links`);
 
     // Send individual email events for each assignee
     if (result.assignees && result.assignees.length > 0) {
@@ -175,10 +213,7 @@ export const createTask = async (req, res) => {
         }
       });
 
-      // Wait for all events to be triggered (but don't block response)
       const emailResults = await Promise.allSettled(emailPromises);
-      
-      // Log summary
       const successful = emailResults.filter(result => 
         result.status === 'fulfilled' && result.value.success
       ).length;
@@ -224,6 +259,7 @@ export const updateTask = async (req, res) => {
             user: true,
           },
         },
+        links: true, // 🆕 NEW: Include existing links
         project: {
           include: {
             workspace: {
@@ -247,8 +283,9 @@ export const updateTask = async (req, res) => {
       type,
       status,
       priority,
-      assignees, // Array of user IDs
+      assignees,
       due_date,
+      links, // 🆕 NEW: Array of { url, title } objects for task links
     } = req.body;
 
     // Validate enum values if provided
@@ -309,6 +346,20 @@ export const updateTask = async (req, res) => {
       }
     }
 
+    // 🆕 NEW: Validate links if provided
+    if (links && Array.isArray(links)) {
+      for (const link of links) {
+        if (!link.url) {
+          return res.status(400).json({ message: "Link URL is required for all links." });
+        }
+        try {
+          new URL(link.url); // Validate URL format
+        } catch (error) {
+          return res.status(400).json({ message: `Invalid URL: ${link.url}` });
+        }
+      }
+    }
+
     // Track if status changed for email notification
     const statusChanged = status && status !== task.status;
 
@@ -328,23 +379,39 @@ export const updateTask = async (req, res) => {
         },
       });
 
+      // 🆕 NEW: Update task links if provided
+      if (links !== undefined) {
+        // Delete all existing links for this task
+        await tx.taskLink.deleteMany({
+          where: { taskId: taskId }
+        });
+
+        // Create new links
+        if (links.length > 0) {
+          await tx.taskLink.createMany({
+            data: links.map((link) => ({
+              url: link.url,
+              title: link.title || null,
+              taskId: taskId,
+              userId: userId,
+            })),
+          });
+        }
+      }
+
       // Update assignees if provided
       if (assignees !== undefined) {
-        // Get current assignees
         const currentAssigneeIds = task.assignees.map((a) => a.user.id);
         const newAssigneeIds = assignees;
 
-        // Find assignees to add
-        const assigneesToAdd = newAssigneeIds.filter(
-          (id) => !currentAssigneeIds.includes(id)
-        );
-
-        // Find assignees to remove
         const assigneesToRemove = currentAssigneeIds.filter(
           (id) => !newAssigneeIds.includes(id)
         );
 
-        // Remove assignees
+        const assigneesToAdd = newAssigneeIds.filter(
+          (id) => !currentAssigneeIds.includes(id)
+        );
+
         if (assigneesToRemove.length > 0) {
           await tx.taskAssignee.deleteMany({
             where: {
@@ -354,7 +421,6 @@ export const updateTask = async (req, res) => {
           });
         }
 
-        // Add new assignees
         if (assigneesToAdd.length > 0) {
           await tx.taskAssignee.createMany({
             data: assigneesToAdd.map((userId) => ({
@@ -366,7 +432,7 @@ export const updateTask = async (req, res) => {
         }
       }
 
-      // Return updated task with full details
+      // Return updated task with full details including links
       return await tx.task.findUnique({
         where: { id: taskId },
         include: {
@@ -382,6 +448,17 @@ export const updateTask = async (req, res) => {
               },
             },
           },
+          links: { // 🆕 NEW: Include task links
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+          },
           project: {
             select: {
               id: true,
@@ -392,9 +469,9 @@ export const updateTask = async (req, res) => {
       });
     });
 
-    console.log(`✅ Task updated: ${updatedTask.id}`);
+    console.log(`✅ Task updated: ${updatedTask.id} with ${updatedTask.links.length} links`);
 
-    // 🔥 TRIGGER EMAIL EVENTS FOR STATUS CHANGES
+    // Trigger email events for status changes
     if (statusChanged) {
       try {
         await inngest.send({
@@ -413,7 +490,7 @@ export const updateTask = async (req, res) => {
       }
     }
 
-    // 🔥 TRIGGER EMAIL EVENTS FOR NEW ASSIGNEES
+    // Trigger email events for new assignees
     if (assignees !== undefined) {
       const currentAssigneeIds = task.assignees.map((a) => a.user.id);
       const newAssigneeIds = assignees;
@@ -429,18 +506,12 @@ export const updateTask = async (req, res) => {
               data: {
                 taskId: taskId,
                 assigneeId: newAssigneeId,
-                origin:
-                  origin || process.env.FRONTEND_URL || "http://localhost:3000",
+                origin: origin || process.env.FRONTEND_URL || "http://localhost:3000",
               },
             });
-            console.log(
-              `✅ Triggered email event for new assignee: ${newAssigneeId}`
-            );
+            console.log(`✅ Triggered email event for new assignee: ${newAssigneeId}`);
           } catch (eventError) {
-            console.error(
-              `❌ Failed to trigger event for new assignee ${newAssigneeId}:`,
-              eventError
-            );
+            console.error(`❌ Failed to trigger event for new assignee ${newAssigneeId}:`, eventError);
           }
         }
       }
@@ -453,7 +524,191 @@ export const updateTask = async (req, res) => {
   }
 };
 
-// Delete single task by ID
+// Get task by ID - UPDATED to include links
+export const getTask = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { id: taskId } = req.params;
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: {
+        assignees: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        links: { // 🆕 NEW: Include task links
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+        },
+        project: {
+          include: {
+            workspace: {
+              include: {
+                members: {
+                  where: { userId },
+                },
+              },
+            },
+            members: {
+              where: { userId },
+            },
+          },
+        },
+        comments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+            links: { // 🆕 NEW: Include comment links
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+      },
+    });
+
+    if (!task) {
+      return res.status(404).json({ message: "Task not found." });
+    }
+
+    // Check if user has access to this task
+    const hasWorkspaceAccess = task.project.workspace.members.length > 0;
+    const hasProjectAccess = task.project.members.length > 0;
+    const isTaskAssignee = task.assignees.some(
+      (assignee) => assignee.user.id === userId
+    );
+
+    if (!hasWorkspaceAccess && !hasProjectAccess && !isTaskAssignee) {
+      return res.status(403).json({
+        message: "You don't have access to this task.",
+      });
+    }
+
+    res.json({ task });
+  } catch (error) {
+    console.error("❌ Error fetching task:", error);
+    res.status(500).json({ message: error.code || error.message });
+  }
+};
+
+// Get tasks by project - UPDATED to include links
+export const getProjectTasks = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { projectId } = req.params;
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        workspace: {
+          include: {
+            members: {
+              where: { userId },
+            },
+          },
+        },
+        members: {
+          where: { userId },
+        },
+      },
+    });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    // Check if user has access to this project
+    const hasWorkspaceAccess = project.workspace.members.length > 0;
+    const hasProjectAccess = project.members.length > 0;
+
+    if (!hasWorkspaceAccess && !hasProjectAccess) {
+      return res.status(403).json({
+        message: "You don't have access to this project's tasks.",
+      });
+    }
+
+    const tasks = await prisma.task.findMany({
+      where: { projectId },
+      include: {
+        assignees: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        links: { // 🆕 NEW: Include task links
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+        },
+        comments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json({ tasks });
+  } catch (error) {
+    console.error("❌ Error fetching project tasks:", error);
+    res.status(500).json({ message: error.code || error.message });
+  }
+};
+
+// Delete single task by ID (no changes needed - cascade delete handles links)
 export const deleteTask = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -490,7 +745,6 @@ export const deleteTask = async (req, res) => {
         .json({ message: "You don't have permission to delete this task." });
     }
 
-    // Delete task (Prisma will cascade delete related task assignees and comments)
     await prisma.task.delete({
       where: { id: taskId },
     });
@@ -507,7 +761,7 @@ export const deleteTask = async (req, res) => {
   }
 };
 
-// Delete multiple tasks (bulk deletion)
+// Delete multiple tasks (bulk deletion) - no changes needed
 export const deleteTasks = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -561,7 +815,6 @@ export const deleteTasks = async (req, res) => {
         });
     }
 
-    // Delete tasks (Prisma will cascade delete related task assignees and comments)
     await prisma.task.deleteMany({
       where: { id: { in: tasksIds } },
     });
@@ -576,157 +829,6 @@ export const deleteTasks = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error deleting tasks:", error);
-    res.status(500).json({ message: error.code || error.message });
-  }
-};
-
-// Get task by ID
-export const getTask = async (req, res) => {
-  try {
-    const { userId } = await req.auth();
-    const { id: taskId } = req.params;
-
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      include: {
-        assignees: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-              },
-            },
-          },
-        },
-        project: {
-          include: {
-            workspace: {
-              include: {
-                members: {
-                  where: { userId },
-                },
-              },
-            },
-            members: {
-              where: { userId },
-            },
-          },
-        },
-        comments: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-              },
-            },
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
-      },
-    });
-
-    if (!task) {
-      return res.status(404).json({ message: "Task not found." });
-    }
-
-    // Check if user has access to this task
-    const hasWorkspaceAccess = task.project.workspace.members.length > 0;
-    const hasProjectAccess = task.project.members.length > 0;
-    const isTaskAssignee = task.assignees.some(
-      (assignee) => assignee.user.id === userId
-    );
-
-    if (!hasWorkspaceAccess && !hasProjectAccess && !isTaskAssignee) {
-      return res.status(403).json({
-        message: "You don't have access to this task.",
-      });
-    }
-
-    res.json({ task });
-  } catch (error) {
-    console.error("❌ Error fetching task:", error);
-    res.status(500).json({ message: error.code || error.message });
-  }
-};
-
-// Get tasks by project
-export const getProjectTasks = async (req, res) => {
-  try {
-    const { userId } = await req.auth();
-    const { projectId } = req.params;
-
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        workspace: {
-          include: {
-            members: {
-              where: { userId },
-            },
-          },
-        },
-        members: {
-          where: { userId },
-        },
-      },
-    });
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found." });
-    }
-
-    // Check if user has access to this project
-    const hasWorkspaceAccess = project.workspace.members.length > 0;
-    const hasProjectAccess = project.members.length > 0;
-
-    if (!hasWorkspaceAccess && !hasProjectAccess) {
-      return res.status(403).json({
-        message: "You don't have access to this project's tasks.",
-      });
-    }
-
-    const tasks = await prisma.task.findMany({
-      where: { projectId },
-      include: {
-        assignees: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-              },
-            },
-          },
-        },
-        comments: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    res.json({ tasks });
-  } catch (error) {
-    console.error("❌ Error fetching project tasks:", error);
     res.status(500).json({ message: error.code || error.message });
   }
 };

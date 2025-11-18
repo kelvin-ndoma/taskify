@@ -13,7 +13,11 @@ import {
   Save,
   X,
   UserPlus,
-  UserMinus
+  UserMinus,
+  LinkIcon,
+  ExternalLinkIcon,
+  PlusIcon,
+  PaperclipIcon
 } from "lucide-react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import api from "../configs/api";
@@ -47,6 +51,11 @@ const TaskDetails = () => {
   const [availableMembers, setAvailableMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState("");
 
+  // 🆕 NEW: Comment link states
+  const [commentLinks, setCommentLinks] = useState([]);
+  const [showCommentLinkInput, setShowCommentLinkInput] = useState(false);
+  const [commentLinkUrl, setCommentLinkUrl] = useState("");
+
   const { currentWorkspace } = useSelector((state) => state.workspace);
 
   // 🆕 Safe image URL handler
@@ -79,6 +88,189 @@ const TaskDetails = () => {
     );
   };
 
+  // 🆕 UPDATED: Task Link Component (for TaskLink model)
+  const TaskLink = ({ link }) => {
+    const getDomainFromUrl = (url) => {
+      try {
+        const domain = new URL(url).hostname.replace('www.', '');
+        return domain;
+      } catch {
+        return url;
+      }
+    };
+
+    const getFaviconUrl = (url) => {
+      try {
+        const domain = new URL(url).hostname;
+        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+      } catch {
+        return null;
+      }
+    };
+
+    const faviconUrl = getFaviconUrl(link.url);
+    const domain = getDomainFromUrl(link.url);
+
+    return (
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-start gap-3 p-3 border border-gray-200 dark:border-zinc-700 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors group"
+      >
+        <div className="flex-shrink-0">
+          {faviconUrl ? (
+            <img 
+              src={faviconUrl} 
+              alt="" 
+              className="size-6 rounded"
+            />
+          ) : (
+            <div className="size-6 bg-blue-500 rounded flex items-center justify-center">
+              <LinkIcon className="size-3 text-white" />
+            </div>
+          )}
+        </div>
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-zinc-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              {link.title || domain}
+            </h4>
+            <ExternalLinkIcon className="size-3 text-gray-400 flex-shrink-0 mt-1" />
+          </div>
+          
+          <p className="text-xs text-gray-500 dark:text-zinc-500 mt-1 truncate">
+            {link.url}
+          </p>
+        </div>
+      </a>
+    );
+  };
+
+  // 🆕 UPDATED: Comment Link Component (for CommentLink model - URL only)
+  const CommentLink = ({ link }) => {
+    const getDomainFromUrl = (url) => {
+      try {
+        const domain = new URL(url).hostname.replace('www.', '');
+        return domain;
+      } catch {
+        return url;
+      }
+    };
+
+    const getFaviconUrl = (url) => {
+      try {
+        const domain = new URL(url).hostname;
+        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+      } catch {
+        return null;
+      }
+    };
+
+    const faviconUrl = getFaviconUrl(link.url);
+    const domain = getDomainFromUrl(link.url);
+
+    return (
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-start gap-3 p-3 border border-gray-200 dark:border-zinc-700 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors group"
+      >
+        <div className="flex-shrink-0">
+          {faviconUrl ? (
+            <img 
+              src={faviconUrl} 
+              alt="" 
+              className="size-6 rounded"
+            />
+          ) : (
+            <div className="size-6 bg-blue-500 rounded flex items-center justify-center">
+              <LinkIcon className="size-3 text-white" />
+            </div>
+          )}
+        </div>
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-zinc-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              {domain}
+            </h4>
+            <ExternalLinkIcon className="size-3 text-gray-400 flex-shrink-0 mt-1" />
+          </div>
+          
+          <p className="text-xs text-gray-500 dark:text-zinc-500 mt-1 truncate">
+            {link.url}
+          </p>
+        </div>
+      </a>
+    );
+  };
+
+  // 🆕 NEW: Add comment link
+  const addCommentLink = () => {
+    if (!commentLinkUrl.trim()) {
+      toast.error("Please enter a valid URL");
+      return;
+    }
+
+    // Basic URL validation
+    let formattedUrl = commentLinkUrl.trim();
+    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+      formattedUrl = 'https://' + formattedUrl;
+    }
+
+    try {
+      new URL(formattedUrl); // Validate URL
+      
+      const newLink = {
+        url: formattedUrl,
+        id: Date.now().toString() // temporary ID for frontend
+      };
+
+      setCommentLinks(prev => [...prev, newLink]);
+      setCommentLinkUrl("");
+      setShowCommentLinkInput(false);
+      toast.success("Link added to comment!");
+    } catch (error) {
+      toast.error("Please enter a valid URL");
+    }
+  };
+
+  // 🆕 NEW: Remove comment link
+  const removeCommentLink = (linkId) => {
+    setCommentLinks(prev => prev.filter(link => link.id !== linkId));
+  };
+
+  // 🆕 NEW: Extract and render links from text content
+  const renderContentWithLinks = (content) => {
+    if (!content) return null;
+
+    const urlRegex = /(https?:\/\/[^\s<>{}\[\]\\^`|()]+[^\s<>{}\[\]\\^`|.,!?;)]\)?)/gi;
+    
+    const parts = content.split(urlRegex);
+    const matches = content.match(urlRegex) || [];
+
+    return parts.map((part, index) => {
+      if (matches.includes(part)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+          >
+            {part}
+            <ExternalLinkIcon className="size-3" />
+          </a>
+        );
+      }
+      return part;
+    });
+  };
+
   // ✅ Fetch comments with correct endpoint
   const fetchComments = async () => {
     if (!taskId) return;
@@ -104,40 +296,113 @@ const TaskDetails = () => {
     }
   };
 
-  // ✅ Fetch task details locally
+  // ✅ UPDATED: Fetch task details directly from API to get links
   const fetchTaskDetails = async () => {
     setLoading(true);
-    if (!projectId || !taskId) return;
-
-    const proj = currentWorkspace?.projects?.find((p) => p.id === projectId);
-    if (!proj) {
+    if (!taskId) {
       setLoading(false);
       return;
     }
 
-    const tsk = proj.tasks.find((t) => t.id === taskId);
-    if (!tsk) {
-      setLoading(false);
-      return;
-    }
+    try {
+      const token = await getToken();
+      const { data } = await api.get(`/api/tasks/${taskId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    setTask(tsk);
-    setProject(proj);
-    setEditingTaskData({
-      title: tsk.title,
-      description: tsk.description,
-      status: tsk.status,
-      type: tsk.type,
-      priority: tsk.priority,
-      due_date: tsk.due_date
-    });
-    
-    // 🆕 Set available members for assignee management
-    if (proj.members) {
-      setAvailableMembers(proj.members);
+      if (data.task) {
+        console.log("Task with links:", data.task);
+        setTask(data.task);
+        
+        // Use the project from the task response or fallback to Redux store
+        if (data.task.project) {
+          setProject(data.task.project);
+        } else {
+          // Fallback to Redux store if project not in response
+          const proj = currentWorkspace?.projects?.find((p) => p.id === projectId);
+          setProject(proj);
+        }
+        
+        setEditingTaskData({
+          title: data.task.title,
+          description: data.task.description,
+          status: data.task.status,
+          type: data.task.type,
+          priority: data.task.priority,
+          due_date: data.task.due_date
+        });
+        
+        // Set available members from project
+        if (data.task.project?.members) {
+          setAvailableMembers(data.task.project.members);
+        } else {
+          const proj = currentWorkspace?.projects?.find((p) => p.id === projectId);
+          if (proj?.members) {
+            setAvailableMembers(proj.members);
+          }
+        }
+      } else {
+        // Fallback to Redux store if API fails
+        const proj = currentWorkspace?.projects?.find((p) => p.id === projectId);
+        if (!proj) {
+          setLoading(false);
+          return;
+        }
+
+        const tsk = proj.tasks.find((t) => t.id === taskId);
+        if (!tsk) {
+          setLoading(false);
+          return;
+        }
+
+        setTask(tsk);
+        setProject(proj);
+        setEditingTaskData({
+          title: tsk.title,
+          description: tsk.description,
+          status: tsk.status,
+          type: tsk.type,
+          priority: tsk.priority,
+          due_date: tsk.due_date
+        });
+        
+        if (proj.members) {
+          setAvailableMembers(proj.members);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch task from API, falling back to Redux:", error);
+      
+      // Fallback to Redux store
+      const proj = currentWorkspace?.projects?.find((p) => p.id === projectId);
+      if (!proj) {
+        setLoading(false);
+        return;
+      }
+
+      const tsk = proj.tasks.find((t) => t.id === taskId);
+      if (!tsk) {
+        setLoading(false);
+        return;
+      }
+
+      setTask(tsk);
+      setProject(proj);
+      setEditingTaskData({
+        title: tsk.title,
+        description: tsk.description,
+        status: tsk.status,
+        type: tsk.type,
+        priority: tsk.priority,
+        due_date: tsk.due_date
+      });
+      
+      if (proj.members) {
+        setAvailableMembers(proj.members);
+      }
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   // 🆕 Update task function
@@ -297,23 +562,39 @@ const TaskDetails = () => {
     }
   };
 
-  // ✅ Add comment
+  // ✅ UPDATED: Add comment with links support
   const handleAddComment = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() && commentLinks.length === 0) {
+      toast.error("Comment cannot be empty");
+      return;
+    }
 
     try {
       setCommentLoading(true);
       toast.loading("Adding comment...");
       const token = await getToken();
 
+      // 🆕 NEW: Prepare links data for comment
+      const linksData = commentLinks.map(link => ({
+        url: link.url
+      }));
+
       const { data } = await api.post(
         `/api/comments`,
-        { taskId: task.id, content: newComment },
+        { 
+          taskId: task.id, 
+          content: newComment,
+          links: linksData // 🆕 NEW: Include links in request
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       setComments((prev) => [...prev, data.comment]);
       setNewComment("");
+      // 🆕 NEW: Reset comment links
+      setCommentLinks([]);
+      setCommentLinkUrl("");
+      setShowCommentLinkInput(false);
       toast.dismissAll();
       toast.success("Comment added.");
     } catch (error) {
@@ -367,6 +648,15 @@ const TaskDetails = () => {
     
     return () => clearInterval(interval);
   }, [taskId]);
+
+  // 🆕 Debug: Log task data to see what we're getting
+  useEffect(() => {
+    if (task) {
+      console.log("Current task data:", task);
+      console.log("Task links:", task.links);
+      console.log("Task description:", task.description);
+    }
+  }, [task]);
 
   // 🆕 Handle Enter key for comment submission
   const handleKeyPress = (e) => {
@@ -458,7 +748,18 @@ const TaskDetails = () => {
                         autoFocus
                       />
                     ) : (
-                      <p className="text-sm text-gray-900 dark:text-zinc-200">{comment.content}</p>
+                      <div className="text-sm text-gray-900 dark:text-zinc-200">
+                        {renderContentWithLinks(comment.content)}
+                      </div>
+                    )}
+
+                    {/* 🆕 UPDATED: Comment Links (using CommentLink model) */}
+                    {comment.links && comment.links.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {comment.links.map((link) => (
+                          <CommentLink key={link.id} link={link} />
+                        ))}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -472,9 +773,73 @@ const TaskDetails = () => {
             )}
           </div>
 
-          {/* Add Comment */}
+          {/* 🆕 UPDATED: Add Comment with Links Support */}
           <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3 pt-4 border-t border-gray-200 dark:border-zinc-700">
             <div className="flex-1 w-full">
+              {/* Comment Link Attachments */}
+              <div className="mb-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <PaperclipIcon className="size-4" />
+                    Attach Links to Comment
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowCommentLinkInput(!showCommentLinkInput)}
+                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  >
+                    <PlusIcon className="size-3" />
+                    {showCommentLinkInput ? "Cancel" : "Add Link"}
+                  </button>
+                </div>
+
+                {/* Comment Link Input */}
+                {showCommentLinkInput && (
+                  <div className="flex gap-2 p-3 border border-gray-200 dark:border-zinc-700 rounded-lg bg-gray-50 dark:bg-zinc-800/50">
+                    <input
+                      type="url"
+                      value={commentLinkUrl}
+                      onChange={(e) => setCommentLinkUrl(e.target.value)}
+                      placeholder="https://example.com"
+                      className="flex-1 rounded dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCommentLink())}
+                    />
+                    <button
+                      type="button"
+                      onClick={addCommentLink}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm flex items-center gap-1"
+                    >
+                      <PlusIcon className="size-3" />
+                      Add
+                    </button>
+                  </div>
+                )}
+
+                {/* Comment Links Preview */}
+                {commentLinks.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-500 dark:text-zinc-400">
+                      {commentLinks.length} link(s) attached to this comment
+                    </p>
+                    <div className="space-y-2 max-h-20 overflow-y-auto">
+                      {commentLinks.map((link) => (
+                        <div key={link.id} className="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-500/10 p-2 rounded">
+                          <LinkIcon className="size-3 text-blue-500 flex-shrink-0" />
+                          <span className="truncate flex-1">{link.url}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeCommentLink(link.id)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <XIcon className="size-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <textarea
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
@@ -490,7 +855,7 @@ const TaskDetails = () => {
             </div>
             <button
               onClick={handleAddComment}
-              disabled={!newComment.trim() || commentLoading}
+              disabled={(!newComment.trim() && commentLinks.length === 0) || commentLoading}
               className="bg-gradient-to-l from-blue-500 to-blue-600 transition-colors text-white text-sm px-6 py-3 rounded disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {commentLoading ? "Posting..." : "Post"}
@@ -518,7 +883,7 @@ const TaskDetails = () => {
               <div className="flex flex-wrap gap-2 mt-2">
                 {isEditingTask ? (
                   <>
-                    {/* UPDATED: Task Status Options */}
+                    {/* Task Status Options */}
                     <select
                       value={editingTaskData.status}
                       onChange={(e) => setEditingTaskData(prev => ({ ...prev, status: e.target.value }))}
@@ -531,7 +896,7 @@ const TaskDetails = () => {
                       <option value="CANCELLED">Cancelled</option>
                     </select>
                     
-                    {/* UPDATED: Task Type Options */}
+                    {/* Task Type Options */}
                     <select
                       value={editingTaskData.type}
                       onChange={(e) => setEditingTaskData(prev => ({ ...prev, type: e.target.value }))}
@@ -616,8 +981,25 @@ const TaskDetails = () => {
             />
           ) : (
             task.description && (
-              <p className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed mb-4">{task.description}</p>
+              <div className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed mb-4">
+                {renderContentWithLinks(task.description)}
+              </div>
             )
+          )}
+
+          {/* 🆕 UPDATED: Task Links (using TaskLink model) */}
+          {task.links && task.links.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <LinkIcon className="size-4 text-gray-500 dark:text-zinc-500" />
+                <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">Attached Links</span>
+              </div>
+              <div className="space-y-2">
+                {task.links.map((link) => (
+                  <TaskLink key={link.id} link={link} />
+                ))}
+              </div>
+            </div>
           )}
 
           {/* SAVE BUTTON FOR TASK UPDATES */}
@@ -642,7 +1024,7 @@ const TaskDetails = () => {
 
           <hr className="border-zinc-200 dark:border-zinc-700 my-3" />
 
-          {/* 🆕 Assignees Section with Management */}
+          {/* Assignees Section with Management */}
           <div className="space-y-3 text-sm text-gray-700 dark:text-zinc-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -650,7 +1032,7 @@ const TaskDetails = () => {
                 <span className="font-medium">Assignees:</span>
               </div>
               
-              {/* 🆕 Manage Assignees Button */}
+              {/* Manage Assignees Button */}
               {canEditTask() && !isEditingTask && (
                 <button
                   onClick={() => setIsManagingAssignees(!isManagingAssignees)}
@@ -662,7 +1044,7 @@ const TaskDetails = () => {
               )}
             </div>
 
-            {/* 🆕 Add Assignee Form */}
+            {/* Add Assignee Form */}
             {isManagingAssignees && canEditTask() && (
               <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded border border-blue-200 dark:border-blue-800">
                 <div className="flex items-center gap-2 mb-2">
@@ -705,7 +1087,7 @@ const TaskDetails = () => {
                     <UserAvatar user={assignee.user} size={4} />
                     <span className="text-xs">{assignee.user?.name || "Unassigned"}</span>
                     
-                    {/* 🆕 Remove Assignee Button */}
+                    {/* Remove Assignee Button */}
                     {canEditTask() && (
                       <button
                         onClick={() => handleRemoveAssignee(assignee.user.id)}
@@ -734,7 +1116,7 @@ const TaskDetails = () => {
                   className="px-2 py-1 text-xs border border-gray-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800"
                 />
               ) : (
-                <span>{format(new Date(task.due_date), "dd MMM yyyy")}</span>
+                <span>{task.due_date ? format(new Date(task.due_date), "dd MMM yyyy") : "No due date"}</span>
               )}
             </div>
           </div>
@@ -747,7 +1129,7 @@ const TaskDetails = () => {
               <PenIcon className="size-4" /> {project.name}
             </h2>
             <p className="text-xs mt-3">
-              Project Start Date: {format(new Date(project.start_date), "dd MMM yyyy")}
+              Project Start Date: {project.start_date ? format(new Date(project.start_date), "dd MMM yyyy") : "Not set"}
             </p>
             <div className="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-zinc-400 mt-3">
               <span>Status: {project.status}</span>
