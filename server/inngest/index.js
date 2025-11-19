@@ -8,11 +8,11 @@ export const inngest = new Inngest({ id: "project-management" });
 
 // 🏢 Define the default workspace ID or name
 const DEFAULT_WORKSPACE_NAME = "The Burns Brothers";
+const DEFAULT_WORKSPACE_SLUG = "the-burns-brothers";
 
 /* =========================================================
    🔹 CLERK USER SYNC FUNCTIONS
 ========================================================= */
-
 
 const syncUserCreation = inngest.createFunction(
   { id: "sync-user-from-clerk" },
@@ -65,39 +65,63 @@ const syncUserCreation = inngest.createFunction(
 
       console.log(`✅ User created: ${user.name} (${user.email})`);
 
-      // 🔹 Find the default workspace
+      // 🔹 FIXED: Find the default workspace by SLUG or NAME
       const defaultWorkspace = await prisma.workspace.findFirst({
-        where: { name: DEFAULT_WORKSPACE_NAME },
-      });
-
-      if (!defaultWorkspace) {
-        console.log(
-          `⚠️ Default workspace "${DEFAULT_WORKSPACE_NAME}" not found.`
-        );
-        return;
-      }
-
-      // 🔹 Check if user already in the default workspace
-      const existingMembership = await prisma.workspaceMember.findFirst({
-        where: {
-          userId: user.id,
-          workspaceId: defaultWorkspace.id,
+        where: { 
+          OR: [
+            { slug: DEFAULT_WORKSPACE_SLUG },
+            { name: DEFAULT_WORKSPACE_NAME }
+          ]
         },
       });
 
-      if (!existingMembership) {
+      if (!defaultWorkspace) {
+        console.log(`⚠️ Default workspace "${DEFAULT_WORKSPACE_NAME}" not found. Creating it...`);
+        
+        // Create the default workspace if it doesn't exist
+        const newWorkspace = await prisma.workspace.create({
+          data: {
+            id: `org_${Math.random().toString(36).substr(2, 9)}`, // Generate a Clerk-like ID
+            name: DEFAULT_WORKSPACE_NAME,
+            slug: DEFAULT_WORKSPACE_SLUG,
+            ownerId: user.id, // Make this user the owner
+            description: "Default workspace for all users",
+          },
+        });
+        
+        console.log(`✅ Created default workspace: ${newWorkspace.id}`);
+        
+        // Add user to the newly created workspace as ADMIN (since they're the owner)
         await prisma.workspaceMember.create({
           data: {
             userId: user.id,
-            workspaceId: defaultWorkspace.id,
-            role: "MEMBER",
+            workspaceId: newWorkspace.id,
+            role: "ADMIN",
           },
         });
-        console.log(
-          `✅ Added ${user.name} to default workspace "${DEFAULT_WORKSPACE_NAME}"`
-        );
+        console.log(`✅ Added ${user.name} as ADMIN to newly created default workspace`);
+        
       } else {
-        console.log(`ℹ️ User already in default workspace`);
+        // 🔹 Check if user already in the default workspace
+        const existingMembership = await prisma.workspaceMember.findFirst({
+          where: {
+            userId: user.id,
+            workspaceId: defaultWorkspace.id,
+          },
+        });
+
+        if (!existingMembership) {
+          await prisma.workspaceMember.create({
+            data: {
+              userId: user.id,
+              workspaceId: defaultWorkspace.id,
+              role: "MEMBER",
+            },
+          });
+          console.log(`✅ Added ${user.name} to existing default workspace "${defaultWorkspace.name}"`);
+        } else {
+          console.log(`ℹ️ User already in default workspace as ${existingMembership.role}`);
+        }
       }
     } catch (error) {
       console.error("❌ Error creating user:", error);

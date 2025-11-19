@@ -119,7 +119,12 @@ export const addMember = async (req, res) => {
 
     // 🔥 CRITICAL: Ensure user is in default workspace first
     const defaultWorkspace = await prisma.workspace.findFirst({
-      where: { slug: "the-burns-brothers" },
+      where: { 
+        OR: [
+          { slug: "the-burns-brothers" },
+          { name: "The Burns Brothers" }
+        ]
+      },
     });
 
     if (!defaultWorkspace) {
@@ -565,7 +570,7 @@ export const updateMemberRole = async (req, res) => {
   }
 };
 
-// ✅ SAFE VERSION: Won't crash if user doesn't exist
+// ✅ IMPROVED: ensureDefaultWorkspace function
 export const ensureDefaultWorkspace = async (userId) => {
   try {
     console.log(`🔄 ensureDefaultWorkspace called with userId: ${userId}`);
@@ -573,37 +578,31 @@ export const ensureDefaultWorkspace = async (userId) => {
     const defaultWorkspaceSlug = "the-burns-brothers";
 
     // First, verify the user exists
-    try {
-      const userExists = await prisma.user.findUnique({
-        where: { id: userId }
-      });
+    const userExists = await prisma.user.findUnique({
+      where: { id: userId }
+    });
 
-      if (!userExists) {
-        console.warn(`⚠️ User ${userId} not found in database, skipping workspace setup`);
-        // Return the workspace anyway so the app doesn't crash
-        const workspace = await prisma.workspace.findUnique({
-          where: { slug: defaultWorkspaceSlug },
-        });
-        return workspace; // This might be null, but that's handled by the frontend
-      }
-    } catch (userError) {
-      console.warn(`⚠️ Could not verify user ${userId}, skipping workspace setup:`, userError);
-      // Return workspace anyway
-      const workspace = await prisma.workspace.findUnique({
-        where: { slug: defaultWorkspaceSlug },
-      });
-      return workspace;
+    if (!userExists) {
+      console.warn(`⚠️ User ${userId} not found in database`);
+      return null;
     }
 
-    // If we get here, the user exists
-    const workspace = await prisma.workspace.findUnique({
-      where: { slug: defaultWorkspaceSlug },
+    // Find the default workspace by slug OR name
+    const workspace = await prisma.workspace.findFirst({
+      where: { 
+        OR: [
+          { slug: defaultWorkspaceSlug },
+          { name: "The Burns Brothers" }
+        ]
+      },
     });
 
     if (!workspace) {
-      console.warn(`⚠️ Default workspace not found`);
+      console.error(`❌ Default workspace not found in database`);
       return null;
     }
+
+    console.log(`✅ Found default workspace: ${workspace.name} (ID: ${workspace.id})`);
 
     // Check if user is already a member
     const existingMember = await prisma.workspaceMember.findUnique({
@@ -627,20 +626,18 @@ export const ensureDefaultWorkspace = async (userId) => {
       console.log(`ℹ️ User ${userId} already in default workspace as ${existingMember.role}`);
     }
 
-    return workspace;
+    return {
+      workspaceId: workspace.id,
+      workspaceName: workspace.name
+    };
   } catch (error) {
     console.error("❌ Error in ensureDefaultWorkspace:", error);
     
-    // For any error, try to return the workspace anyway
-    try {
-      const workspace = await prisma.workspace.findUnique({
-        where: { slug: "the-burns-brothers" },
-      });
-      return workspace;
-    } catch (fallbackError) {
-      console.error("❌ Could not get workspace as fallback:", fallbackError);
-      return null;
+    if (error.code === 'P2002') {
+      console.log('ℹ️ User already exists in workspace (unique constraint)');
     }
+    
+    return null;
   }
 };
 
