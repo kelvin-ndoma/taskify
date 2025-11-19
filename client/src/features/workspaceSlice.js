@@ -1,16 +1,42 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import api from "../configs/api";
 
-export const fetchWorkspaces = createAsyncThunk('workspace/fetchWorkspaces', async ({ getToken }) => {
+export const fetchWorkspaces = createAsyncThunk('workspace/fetchWorkspaces', async ({ getToken }, { rejectWithValue }) => {
     try {
-        const { data } = await api.get('/api/workspaces', { 
-            headers: { Authorization: `Bearer ${await getToken()}` } 
+        console.log('🔄 fetchWorkspaces called');
+        
+        const token = await getToken();
+        if (!token) {
+            throw new Error('No authentication token available');
+        }
+
+        const response = await api.get('/api/workspaces', { 
+            headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            } 
         });
-        console.log('🔄 Workspaces fetched successfully:', data.workspaces?.length || 0);
-        return data.workspaces || [];
+
+        console.log('✅ Workspaces API response:', {
+            status: response.status,
+            data: response.data,
+            workspacesCount: response.data.workspaces?.length || 0
+        });
+
+        if (!response.data.workspaces) {
+            console.warn('⚠️ No workspaces array in response:', response.data);
+            return [];
+        }
+
+        return response.data.workspaces;
     } catch (error) {
-        console.error('❌ Error fetching workspaces:', error?.response?.data?.message || error.message);
-        return [];
+        console.error('❌ Error fetching workspaces:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+        
+        return rejectWithValue(error.response?.data || error.message);
     }
 });
 
@@ -18,7 +44,7 @@ const initialState = {
     workspaces: [],
     currentWorkspace: null,
     loading: false,
-    initialized: false, // 🚨 CRITICAL: Add this missing flag
+    initialized: false,
 };
 
 const workspaceSlice = createSlice({
@@ -27,7 +53,7 @@ const workspaceSlice = createSlice({
     reducers: {
         setWorkspaces: (state, action) => {
             state.workspaces = action.payload;
-            state.initialized = true; // Mark as initialized
+            state.initialized = true;
         },
         setCurrentWorkspace: (state, action) => {
             localStorage.setItem("currentWorkspaceId", action.payload);
@@ -48,7 +74,7 @@ const workspaceSlice = createSlice({
             }
         },
         deleteWorkspace: (state, action) => {
-            state.workspaces = state.workspaces.filter((w) => w.id !== action.payload); // Fixed: w._id to w.id
+            state.workspaces = state.workspaces.filter((w) => w.id !== action.payload);
         },
         addProject: (state, action) => {
             state.currentWorkspace.projects.push(action.payload);
@@ -106,7 +132,6 @@ const workspaceSlice = createSlice({
                 } : w
             );
         },
-        // 🆕 Add this reset action for cleanup
         resetWorkspace: (state) => {
             state.workspaces = [];
             state.currentWorkspace = null;
@@ -117,12 +142,12 @@ const workspaceSlice = createSlice({
     extraReducers: (builder) => {
         builder.addCase(fetchWorkspaces.pending, (state) => {
             state.loading = true;
-            state.initialized = false; // Reset on new fetch
+            state.initialized = false;
         });
         
         builder.addCase(fetchWorkspaces.fulfilled, (state, action) => {
             state.workspaces = action.payload;
-            state.initialized = true; // 🚨 CRITICAL: Mark as initialized
+            state.initialized = true;
             
             console.log('✅ Workspaces loaded into Redux:', action.payload.length);
             
@@ -155,7 +180,7 @@ const workspaceSlice = createSlice({
 
         builder.addCase(fetchWorkspaces.rejected, (state) => {
             state.loading = false;
-            state.initialized = true; // Even on error, mark as initialized
+            state.initialized = true;
             console.error('💥 Workspace fetch failed');
         });
     }
@@ -171,7 +196,7 @@ export const {
     addTask, 
     updateTask, 
     deleteTask,
-    resetWorkspace // 🆕 Export the new action
+    resetWorkspace
 } = workspaceSlice.actions;
 
 export default workspaceSlice.reducer;

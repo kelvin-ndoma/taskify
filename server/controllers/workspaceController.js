@@ -570,21 +570,32 @@ export const updateMemberRole = async (req, res) => {
   }
 };
 
-// ✅ IMPROVED: ensureDefaultWorkspace function
+// ✅ FIXED: ensureDefaultWorkspace function - handles missing users
 export const ensureDefaultWorkspace = async (userId) => {
   try {
     console.log(`🔄 ensureDefaultWorkspace called with userId: ${userId}`);
     
     const defaultWorkspaceSlug = "the-burns-brothers";
+    const defaultWorkspaceName = "The Burns Brothers";
 
-    // First, verify the user exists
-    const userExists = await prisma.user.findUnique({
+    // First, verify the user exists - CREATE IF NOT EXISTS
+    let user = await prisma.user.findUnique({
       where: { id: userId }
     });
 
-    if (!userExists) {
-      console.warn(`⚠️ User ${userId} not found in database`);
-      return null;
+    if (!user) {
+      console.warn(`⚠️ User ${userId} not found in database, creating user...`);
+      
+      // Create the user with minimal data
+      user = await prisma.user.create({
+        data: {
+          id: userId,
+          name: "New User",
+          email: `${userId}@temp.com`, // Temporary email
+          image: "",
+        },
+      });
+      console.log(`✅ Created new user: ${user.id}`);
     }
 
     // Find the default workspace by slug OR name
@@ -592,7 +603,7 @@ export const ensureDefaultWorkspace = async (userId) => {
       where: { 
         OR: [
           { slug: defaultWorkspaceSlug },
-          { name: "The Burns Brothers" }
+          { name: defaultWorkspaceName }
         ]
       },
     });
@@ -626,15 +637,23 @@ export const ensureDefaultWorkspace = async (userId) => {
       console.log(`ℹ️ User ${userId} already in default workspace as ${existingMember.role}`);
     }
 
-    return {
-      workspaceId: workspace.id,
-      workspaceName: workspace.name
-    };
+    // Return the workspace object directly
+    return workspace;
   } catch (error) {
     console.error("❌ Error in ensureDefaultWorkspace:", error);
     
     if (error.code === 'P2002') {
       console.log('ℹ️ User already exists in workspace (unique constraint)');
+      // Try to return the workspace anyway
+      const workspace = await prisma.workspace.findFirst({
+        where: { 
+          OR: [
+            { slug: "the-burns-brothers" },
+            { name: "The Burns Brothers" }
+          ]
+        },
+      });
+      return workspace;
     }
     
     return null;

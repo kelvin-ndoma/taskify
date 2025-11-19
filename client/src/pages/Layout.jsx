@@ -19,6 +19,7 @@ const Layout = () => {
 
     // Use ref to track initialization to prevent infinite loops
     const initializedRef = useRef(false);
+    const [isInitializing, setIsInitializing] = useState(false);
 
     // Load theme on mount
     useEffect(() => {
@@ -29,7 +30,7 @@ const Layout = () => {
     useEffect(() => {
         const initializeUserData = async () => {
             // Prevent multiple initializations
-            if (initializedRef.current || !user || !clerkLoaded) {
+            if (initializedRef.current || !user || !clerkLoaded || isInitializing) {
                 return;
             }
 
@@ -41,28 +42,38 @@ const Layout = () => {
 
             try {
                 console.log('🔄 Starting workspace initialization...');
-                initializedRef.current = true; // Mark as initializing
+                setIsInitializing(true);
+                initializedRef.current = true;
                 
                 const token = await getToken();
                 
                 // Ensure default workspace exists (only if no workspaces)
                 if (workspaces.length === 0) {
-                    await ensureDefaultWorkspace(user.id, token);
+                    console.log('🔍 Ensuring default workspace for user:', user.id);
+                    const workspace = await ensureDefaultWorkspace(user.id, token);
+                    if (workspace) {
+                        console.log('✅ Default workspace ensured:', workspace.name);
+                    } else {
+                        console.warn('⚠️ Could not ensure default workspace');
+                    }
                 }
                 
                 // Fetch workspaces via Redux
-                dispatch(fetchWorkspaces({ getToken }));
+                console.log('📡 Fetching workspaces...');
+                await dispatch(fetchWorkspaces({ getToken })).unwrap();
                 
                 console.log('✅ Workspace initialization completed');
 
             } catch (error) {
                 console.error('❌ Error initializing user data:', error);
                 initializedRef.current = false; // Reset on error to allow retry
+            } finally {
+                setIsInitializing(false);
             }
         };
 
         initializeUserData();
-    }, [user, clerkLoaded, dispatch, getToken, initialized, workspaces.length]);
+    }, [user, clerkLoaded, dispatch, getToken, initialized, workspaces.length, isInitializing]);
 
     // Debug logging to track re-renders
     useEffect(() => {
@@ -70,16 +81,19 @@ const Layout = () => {
             clerkLoaded,
             user: !!user,
             userProfile: user ? { 
+                id: user.id,
                 firstName: user.firstName, 
                 lastName: user.lastName,
-                hasFullName: !!(user.firstName && user.lastName)
+                email: user.primaryEmailAddress?.emailAddress
             } : null,
             workspacesCount: workspaces.length,
+            workspaces: workspaces.map(w => ({ id: w.id, name: w.name })),
             loading,
             initialized,
+            isInitializing,
             initializedRef: initializedRef.current
         });
-    }, [clerkLoaded, user, workspaces.length, loading, initialized]);
+    }, [clerkLoaded, user, workspaces, loading, initialized, isInitializing]);
 
     // ========== RENDER LOGIC ==========
 
@@ -93,17 +107,19 @@ const Layout = () => {
         );
     }
 
-    // 2. Workspace data still initializing - show loading
-    if (loading || !initialized) {
+    // 2. Still initializing or loading workspaces
+    if (isInitializing || loading || !initialized) {
         return (
             <div className="flex items-center justify-center h-screen bg-white dark:bg-zinc-950">
                 <Loader2Icon className="size-8 text-blue-500 animate-spin" />
-                <span className="ml-3 text-gray-600 dark:text-gray-400">Loading your workspace...</span>
+                <span className="ml-3 text-gray-600 dark:text-gray-400">
+                    {isInitializing ? 'Setting up your workspace...' : 'Loading your workspace...'}
+                </span>
             </div>
         );
     }
 
-    // 3. User authenticated but no workspaces (shouldn't happen with default workspace)
+    // 3. User authenticated but no workspaces (shouldn't happen with our fix)
     if (workspaces.length === 0) {
         return (
             <div className="min-h-screen flex justify-center items-center bg-white dark:bg-zinc-950 p-4">
@@ -112,14 +128,23 @@ const Layout = () => {
                         <Loader2Icon className="w-8 h-8 text-gray-400 animate-spin" />
                     </div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                        Setting up your workspace
+                        No workspaces found
                     </h3>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                        This should only take a moment. If this persists, please refresh the page.
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                        We couldn't find any workspaces for your account.
                     </p>
                     <button 
+                        onClick={() => {
+                            initializedRef.current = false;
+                            dispatch(fetchWorkspaces({ getToken }));
+                        }} 
+                        className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm mr-2"
+                    >
+                        Retry
+                    </button>
+                    <button 
                         onClick={() => window.location.reload()} 
-                        className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                        className="mt-2 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
                     >
                         Refresh Page
                     </button>
@@ -129,6 +154,7 @@ const Layout = () => {
     }
 
     // 4. SUCCESS: User authenticated with workspaces - show main app
+    console.log('🎉 SUCCESS: Rendering main app with', workspaces.length, 'workspaces');
     return (
         <div className="flex bg-white dark:bg-zinc-950 text-gray-900 dark:text-slate-100">
             <Sidebar isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
