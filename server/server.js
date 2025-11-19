@@ -1,4 +1,3 @@
-// server.js or your main server file
 import express from 'express';
 import 'dotenv/config';
 import cors from 'cors';
@@ -28,8 +27,7 @@ app.use(cors({
         'Authorization', 
         'X-Requested-With',
         'Accept',
-        'Origin',
-        'X-Clerk-Token'
+        'Origin'
     ],
     preflightContinue: false,
     optionsSuccessStatus: 204
@@ -58,17 +56,6 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-// ✅ Error handling middleware
-app.use((error, req, res, next) => {
-  console.error('Server Error:', error);
-  res.status(500).json({ 
-    message: 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { error: error.message })
-  });
-});
-
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
-export default app;
