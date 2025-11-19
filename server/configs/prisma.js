@@ -3,9 +3,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaNeon } from '@prisma/adapter-neon';
 import { Pool } from '@neondatabase/serverless';
-import ws from 'ws';
 
-// For Prisma 7+ with Neon
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
