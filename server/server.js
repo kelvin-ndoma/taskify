@@ -1,3 +1,4 @@
+// SIMPLER CORS setup
 import express from 'express';
 import 'dotenv/config';
 import cors from 'cors';
@@ -12,7 +13,7 @@ import { protect } from './middlewares/authMiddleware.js';
 
 const app = express();
 
-// ✅ COMPREHENSIVE CORS configuration
+// ✅ Simple CORS configuration
 app.use(cors({
     origin: [
         'https://tbb-project-management.vercel.app',
@@ -20,21 +21,8 @@ app.use(cors({
         'http://127.0.0.1:5173', 
         'http://localhost:5173'
     ],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-        'Content-Type', 
-        'Authorization', 
-        'X-Requested-With',
-        'Accept',
-        'Origin'
-    ],
-    preflightContinue: false,
-    optionsSuccessStatus: 204
+    credentials: true
 }));
-
-// ✅ Handle preflight requests explicitly
-app.options('*', cors());
 
 app.use(express.json());
 app.use(clerkMiddleware());
