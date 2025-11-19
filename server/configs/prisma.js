@@ -1,24 +1,28 @@
+// configs/prisma.js
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaNeon } from '@prisma/adapter-neon';
-import { neonConfig } from '@neondatabase/serverless';
-
+import { Pool } from '@neondatabase/serverless';
 import ws from 'ws';
-neonConfig.webSocketConstructor = ws;
 
-// To work in edge environments (Cloudflare Workers, Vercel Edge, etc.), enable querying over fetch
-// neonConfig.poolQueryViaFetch = true
+// For Prisma 7+ with Neon
+const connectionString = process.env.DATABASE_URL;
 
-// Type definitions
-// declare global {
-//   var prisma: PrismaClient | undefined
-// }
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
 
-const connectionString = `${process.env.DATABASE_URL}`;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaNeon(pool);
 
-const adapter = new PrismaNeon({ connectionString });
-const prisma = global.prisma || new PrismaClient({ adapter });
+// Prisma 7+ configuration
+const prisma = global.prisma || new PrismaClient({ 
+  adapter,
+  datasourceUrl: connectionString
+});
 
-if (process.env.NODE_ENV === 'development') global.prisma = prisma;
+if (process.env.NODE_ENV === 'development') {
+  global.prisma = prisma;
+}
 
 export default prisma;

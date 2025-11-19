@@ -1,11 +1,20 @@
 // src/controllers/projectController.js
 import prisma from "../configs/prisma.js";
 
+// Helper function to check workspace admin/owner access
+const hasWorkspaceAdminAccess = (workspace, userId) => {
+  const isAdmin = workspace.members.some(
+    (member) => member.userId === userId && member.role === "ADMIN"
+  );
+  const isOwner = workspace.ownerId === userId;
+  return isAdmin || isOwner;
+};
+
 // Get all projects for current workspace
 export const getProjects = async (req, res) => {
   try {
     const { userId } = await req.auth();
-    const { workspaceId } = req.query; // Get from query params
+    const { workspaceId } = req.query;
 
     if (!workspaceId) {
       return res.status(400).json({ message: "Workspace ID is required." });
@@ -96,20 +105,18 @@ export const createProject = async (req, res) => {
       status,
       start_date,
       end_date,
-      team_members = [], // Array of user IDs or emails
-      team_lead, // User ID or email
+      team_members = [],
+      team_lead,
       progress = 0,
       priority = "MEDIUM",
     } = req.body;
 
-    // Validate required fields
     if (!workspaceId || !name) {
       return res.status(400).json({ 
         message: "Workspace ID and project name are required." 
       });
     }
 
-    // Check if user has Admin role for workspace
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       include: { 
@@ -123,20 +130,16 @@ export const createProject = async (req, res) => {
       return res.status(404).json({ message: "Workspace not found" });
     }
 
-    const isAdmin = workspace.members.some(
-      (member) => member.userId === userId && member.role === "ADMIN"
-    );
-
-    if (!isAdmin) {
+    // UPDATED: Check for ADMIN role OR workspace ownership
+    if (!hasWorkspaceAdminAccess(workspace, userId)) {
       return res.status(403).json({
         message: "You don't have permission to create projects in this workspace.",
       });
     }
 
-    // Resolve team lead (can be ID or email)
+    // Resolve team lead
     let teamLeadId;
     if (team_lead) {
-      // Check if team_lead is an email or ID
       if (team_lead.includes('@')) {
         const teamLeadUser = await prisma.user.findUnique({
           where: { email: team_lead }
@@ -146,11 +149,9 @@ export const createProject = async (req, res) => {
         }
         teamLeadId = teamLeadUser.id;
       } else {
-        // Assume it's a user ID
         teamLeadId = team_lead;
       }
 
-      // Verify team lead is a workspace member
       const isTeamLeadInWorkspace = workspace.members.some(
         member => member.userId === teamLeadId
       );
@@ -160,7 +161,6 @@ export const createProject = async (req, res) => {
         });
       }
     } else {
-      // Default to current user as team lead
       teamLeadId = userId;
     }
 
@@ -179,31 +179,26 @@ export const createProject = async (req, res) => {
       },
     });
 
-    // Add members to project (must be workspace members)
+    // Add members to project
     const membersToAdd = [];
     
-    // Always add team lead as project member
     if (!membersToAdd.includes(teamLeadId)) {
       membersToAdd.push(teamLeadId);
     }
 
-    // Process additional team members
     if (team_members.length > 0) {
       for (const memberIdentifier of team_members) {
         let memberId;
         
         if (memberIdentifier.includes('@')) {
-          // Email provided - find user
           const user = await prisma.user.findUnique({
             where: { email: memberIdentifier }
           });
           if (user) memberId = user.id;
         } else {
-          // Assume user ID
           memberId = memberIdentifier;
         }
 
-        // Verify member is in workspace and not already added
         if (memberId && 
             workspace.members.some(m => m.userId === memberId) && 
             !membersToAdd.includes(memberId)) {
@@ -212,7 +207,6 @@ export const createProject = async (req, res) => {
       }
     }
 
-    // Create project members
     if (membersToAdd.length > 0) {
       await prisma.projectMember.createMany({
         data: membersToAdd.map((memberId) => ({
@@ -223,7 +217,6 @@ export const createProject = async (req, res) => {
       });
     }
 
-    // Fetch complete project with relations
     const projectWithDetails = await prisma.project.findUnique({
       where: { id: project.id },
       include: {
@@ -366,7 +359,6 @@ export const getProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    // Check if user has access to this project
     const hasAccess = project.members.some(member => member.userId === userId) ||
                      project.workspace.members.some(member => member.userId === userId);
 
@@ -396,14 +388,13 @@ export const updateProject = async (req, res) => {
       end_date,
       progress,
       priority,
-      team_lead, // Optional team lead update
+      team_lead,
     } = req.body;
 
     if (!projectId) {
       return res.status(400).json({ message: "Project ID is required." });
     }
 
-    // Get project with workspace and member info
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -420,23 +411,18 @@ export const updateProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    // Check permissions - workspace admin OR project team lead
-    const isWorkspaceAdmin = project.workspace.members.some(
-      (member) => member.userId === userId && member.role === "ADMIN"
-    );
-
+    // UPDATED: Check permissions - workspace admin/owner OR project team lead
+    const hasAdminAccess = hasWorkspaceAdminAccess(project.workspace, userId);
     const isProjectLead = project.team_lead === userId;
 
-    if (!isWorkspaceAdmin && !isProjectLead) {
+    if (!hasAdminAccess && !isProjectLead) {
       return res.status(403).json({
         message: "You don't have permission to update this project.",
       });
     }
 
-    // Handle team lead update if provided
     let teamLeadId = project.team_lead;
     if (team_lead) {
-      // Verify new team lead is a workspace member
       const isNewLeadInWorkspace = project.workspace.members.some(
         member => member.userId === team_lead
       );
@@ -527,20 +513,16 @@ export const deleteProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    // Check permissions - workspace admin OR project team lead
-    const isWorkspaceAdmin = project.workspace.members.some(
-      (member) => member.userId === userId && member.role === "ADMIN"
-    );
-
+    // UPDATED: Check permissions - workspace admin/owner OR project team lead
+    const hasAdminAccess = hasWorkspaceAdminAccess(project.workspace, userId);
     const isProjectLead = project.team_lead === userId;
 
-    if (!isWorkspaceAdmin && !isProjectLead) {
+    if (!hasAdminAccess && !isProjectLead) {
       return res.status(403).json({
         message: "You don't have permission to delete this project.",
       });
     }
 
-    // Delete project (Prisma will cascade delete related records)
     await prisma.project.delete({
       where: { id: projectId }
     });
@@ -584,18 +566,16 @@ export const addProjectMember = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    // Check permissions - workspace admin OR project team lead
-    const isWorkspaceAdmin = project.workspace.members.some(
-      (member) => member.userId === userId && member.role === "ADMIN"
-    );
+    // UPDATED: Check permissions - workspace admin/owner OR project team lead
+    const hasAdminAccess = hasWorkspaceAdminAccess(project.workspace, userId);
+    const isProjectLead = project.team_lead === userId;
 
-    if (project.team_lead !== userId && !isWorkspaceAdmin) {
+    if (!isProjectLead && !hasAdminAccess) {
       return res.status(403).json({ 
-        message: "Only the project lead or workspace admin can add members." 
+        message: "Only the project lead or workspace admin/owner can add members." 
       });
     }
 
-    // Check if user exists and is in workspace
     const user = await prisma.user.findUnique({ 
       where: { email },
       include: {
@@ -617,7 +597,6 @@ export const addProjectMember = async (req, res) => {
       });
     }
 
-    // Check if user is already a project member
     const existingMember = project.members.find(
       (member) => member.userId === user.id
     );
@@ -626,7 +605,6 @@ export const addProjectMember = async (req, res) => {
       return res.status(400).json({ message: "User is already a project member." });
     }
 
-    // Add member to project
     const member = await prisma.projectMember.create({
       data: {
         userId: user.id,
@@ -682,27 +660,22 @@ export const removeProjectMember = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    // Check permissions - workspace admin OR project team lead
-    const isWorkspaceAdmin = project.workspace.members.some(
-      (member) => member.userId === userId && member.role === "ADMIN"
-    );
-
+    // UPDATED: Check permissions - workspace admin/owner OR project team lead
+    const hasAdminAccess = hasWorkspaceAdminAccess(project.workspace, userId);
     const isProjectLead = project.team_lead === userId;
 
-    if (!isWorkspaceAdmin && !isProjectLead) {
+    if (!hasAdminAccess && !isProjectLead) {
       return res.status(403).json({ 
-        message: "Only the project lead or workspace admin can remove members." 
+        message: "Only the project lead or workspace admin/owner can remove members." 
       });
     }
 
-    // Prevent removing project lead
     if (memberId === project.team_lead) {
       return res.status(400).json({ 
         message: "Cannot remove project lead from project." 
       });
     }
 
-    // Find the member to remove
     const memberToRemove = project.members.find(
       (member) => member.userId === memberId
     );
@@ -713,7 +686,6 @@ export const removeProjectMember = async (req, res) => {
       });
     }
 
-    // Remove member from project
     await prisma.projectMember.delete({
       where: {
         userId_projectId: {
@@ -723,7 +695,6 @@ export const removeProjectMember = async (req, res) => {
       }
     });
 
-    // Also remove from any task assignments in this project
     await prisma.taskAssignee.deleteMany({
       where: {
         userId: memberId,
@@ -772,7 +743,6 @@ export const getProjectStats = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    // Check if user has access to this project
     const hasAccess = project.members.some(member => member.userId === userId) ||
                      project.workspace.members.length > 0;
 
@@ -787,13 +757,13 @@ export const getProjectStats = async (req, res) => {
       completedTasks: project.tasks.filter(task => task.status === 'DONE').length,
       inProgressTasks: project.tasks.filter(task => task.status === 'IN_PROGRESS').length,
       todoTasks: project.tasks.filter(task => task.status === 'TODO').length,
-      internalReviewTasks: project.tasks.filter(task => task.status === 'INTERNAL_REVIEW').length, // NEW
-      cancelledTasks: project.tasks.filter(task => task.status === 'CANCELLED').length, // NEW
+      internalReviewTasks: project.tasks.filter(task => task.status === 'INTERNAL_REVIEW').length,
+      cancelledTasks: project.tasks.filter(task => task.status === 'CANCELLED').length,
       totalMembers: project.members.length,
       progress: project.progress,
       overdueTasks: project.tasks.filter(task => 
         task.due_date && new Date(task.due_date) < new Date() && 
-        task.status !== 'DONE' && task.status !== 'CANCELLED' // UPDATED: Exclude cancelled tasks from overdue
+        task.status !== 'DONE' && task.status !== 'CANCELLED'
       ).length
     };
 
@@ -838,14 +808,11 @@ export const updateProjectProgress = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    // Check permissions - workspace admin OR project team lead
-    const isWorkspaceAdmin = project.workspace.members.some(
-      (member) => member.userId === userId && member.role === "ADMIN"
-    );
-
+    // UPDATED: Check permissions - workspace admin/owner OR project team lead
+    const hasAdminAccess = hasWorkspaceAdminAccess(project.workspace, userId);
     const isProjectLead = project.team_lead === userId;
 
-    if (!isWorkspaceAdmin && !isProjectLead) {
+    if (!hasAdminAccess && !isProjectLead) {
       return res.status(403).json({
         message: "You don't have permission to update this project's progress.",
       });
