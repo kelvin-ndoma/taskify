@@ -1,4 +1,4 @@
-// src/routes/workspaceRoutes.js - UPDATED
+// src/routes/workspaceRoutes.js
 import express from 'express';
 import { 
   getUserWorkspaces, 
@@ -19,8 +19,7 @@ workspaceRouter.get('/', getUserWorkspaces);
 // Get specific workspace by ID
 workspaceRouter.get('/:workspaceId', getWorkspaceById);
 
-// Add member to workspace
-workspaceRouter.post('/:workspaceId/members', addMember);
+workspaceRouter.post('/add-member', addMember)
 
 // Remove member from workspace
 workspaceRouter.delete('/:workspaceId/members/:userId', removeMember);
@@ -34,43 +33,17 @@ workspaceRouter.put('/:workspaceId', updateWorkspace);
 // Delete workspace
 workspaceRouter.delete('/:workspaceId', deleteWorkspace);
 
-// Ensure default workspace for a user - FIXED
+// Ensure default workspace for a user
 workspaceRouter.post('/ensure-default', async (req, res) => {
   try {
     const { userId } = req.body;
-    console.log('🔍 /ensure-default - Request received for user:', userId);
-    
-    if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'userId is required' 
-      });
-    }
+    if (!userId) return res.status(400).json({ message: 'userId is required' });
 
     const workspace = await ensureDefaultWorkspace(userId);
-    
-    if (!workspace) {
-      console.log('❌ /ensure-default - Failed to ensure default workspace for user:', userId);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Failed to ensure default workspace' 
-      });
-    }
-
-    console.log('✅ /ensure-default - Success for user:', userId, 'workspace:', workspace.id);
-    
-    res.json({ 
-      success: true, 
-      workspace,
-      message: 'Default workspace ensured successfully'
-    });
-    
+    res.json({ workspace });
   } catch (error) {
-    console.error('❌ /ensure-default - Error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Internal server error' 
-    });
+    console.error('Error ensuring default workspace:', error);
+    res.status(500).json({ message: error.message || 'Internal server error' });
   }
 });
 
