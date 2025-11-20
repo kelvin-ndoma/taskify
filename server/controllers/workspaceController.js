@@ -522,12 +522,21 @@ export const updateMemberRole = async (req, res) => {
 };
 
 // Ensure user's membership in default workspace (never creates fake user)
+// In workspaceController.js - FIX the ensureDefaultWorkspace function
 export const ensureDefaultWorkspace = async (userId) => {
   try {
+    console.log('🔍 ensureDefaultWorkspace - Starting for user:', userId);
+    
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return null;
+    if (!user) {
+      console.log('❌ ensureDefaultWorkspace - User not found:', userId);
+      return null;
+    }
 
-    const workspace = await prisma.workspace.findFirst({
+    console.log('✅ ensureDefaultWorkspace - User found:', user.email);
+
+    // Look for default workspace by slug or name
+    let workspace = await prisma.workspace.findFirst({
       where: {
         OR: [
           { slug: "the-burns-brothers" },
@@ -535,14 +544,40 @@ export const ensureDefaultWorkspace = async (userId) => {
         ],
       },
     });
-    if (!workspace) return null;
 
+    console.log('🔍 ensureDefaultWorkspace - Workspace lookup result:', {
+      found: !!workspace,
+      workspaceId: workspace?.id,
+      workspaceName: workspace?.name
+    });
+
+    // If default workspace doesn't exist, create it
+    if (!workspace) {
+      console.log('🏢 ensureDefaultWorkspace - Creating default workspace...');
+      
+      workspace = await prisma.workspace.create({
+        data: {
+          id: `org_${Math.random().toString(36).substr(2, 9)}`,
+          name: "The Burns Brothers",
+          slug: "the-burns-brothers",
+          ownerId: userId, // Make this user the owner
+          description: "Default workspace for all users",
+        },
+      });
+      
+      console.log('✅ ensureDefaultWorkspace - Created default workspace:', workspace.id);
+    }
+
+    // Check if user is already a member
     const existingMember = await prisma.workspaceMember.findUnique({
       where: {
         userId_workspaceId: { userId, workspaceId: workspace.id },
       },
     });
+
     if (!existingMember) {
+      console.log('👥 ensureDefaultWorkspace - Adding user to default workspace...');
+      
       await prisma.workspaceMember.create({
         data: {
           userId,
@@ -551,9 +586,22 @@ export const ensureDefaultWorkspace = async (userId) => {
           message: "Auto-joined default workspace",
         },
       });
+      
+      console.log('✅ ensureDefaultWorkspace - User added to default workspace');
+    } else {
+      console.log('ℹ️ ensureDefaultWorkspace - User already in default workspace as:', existingMember.role);
     }
+
+    console.log('🎯 ensureDefaultWorkspace - Successfully ensured default workspace:', {
+      workspaceId: workspace.id,
+      workspaceName: workspace.name,
+      userId: userId
+    });
+
     return workspace;
+
   } catch (error) {
+    console.error('❌ ensureDefaultWorkspace - Error:', error);
     return null;
   }
 };

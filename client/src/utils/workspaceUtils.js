@@ -1,4 +1,4 @@
-// src/utils/workspaceUtils.js
+// src/utils/workspaceUtils.js - UPDATED
 import api from '../configs/api';
 
 /**
@@ -27,19 +27,24 @@ export const ensureDefaultWorkspace = async (userId, token, maxRetries = 3) => {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    // Removed timeout to prevent crashes
+                    timeout: 10000, // 10 second timeout
                 }
             );
 
-            if (response.data?.workspace) {
+            console.log('🔍 ensureDefaultWorkspace API response:', {
+                status: response.status,
+                data: response.data
+            });
+
+            if (response.data?.success && response.data?.workspace) {
                 console.log('✅ Default workspace ensured successfully:', {
                     workspaceId: response.data.workspace.id,
                     workspaceName: response.data.workspace.name
                 });
                 return response.data.workspace;
             } else {
-                console.warn('⚠️ ensureDefaultWorkspace: No workspace in response', response.data);
-                throw new Error('No workspace data in response');
+                console.warn('⚠️ ensureDefaultWorkspace: No workspace in response or request failed', response.data);
+                throw new Error(response.data?.message || 'No workspace data in response');
             }
 
         } catch (error) {
@@ -48,17 +53,19 @@ export const ensureDefaultWorkspace = async (userId, token, maxRetries = 3) => {
                 console.error(`⏰ Attempt ${attempt} timed out for user: ${userId}`);
             } else {
                 const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+                const status = error.response?.status;
+                
                 console.error(`❌ Attempt ${attempt} failed to ensure default workspace:`, {
                     error: errorMessage,
-                    status: error.response?.status,
+                    status: status,
                     userId
                 });
-            }
 
-            // Don't retry on client errors (4xx) except 429 (rate limit)
-            if (error.response?.status >= 400 && error.response?.status < 500 && error.response?.status !== 429) {
-                console.error('🛑 Client error, not retrying:', error.response?.status);
-                return null;
+                // Don't retry on client errors (4xx) except 429 (rate limit)
+                if (status >= 400 && status < 500 && status !== 429) {
+                    console.error('🛑 Client error, not retrying:', status);
+                    return null;
+                }
             }
 
             // Final attempt failed
@@ -100,7 +107,7 @@ export const fetchUserWorkspaces = async (token) => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            // Removed timeout to prevent crashes
+            timeout: 10000, // 10 second timeout
         });
 
         const workspaces = response.data?.workspaces || [];

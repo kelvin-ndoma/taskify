@@ -1,4 +1,4 @@
-// src/routes/workspaceRoutes.js
+// src/routes/workspaceRoutes.js - UPDATED
 import express from 'express';
 import { 
   getUserWorkspaces, 
@@ -34,17 +34,43 @@ workspaceRouter.put('/:workspaceId', updateWorkspace);
 // Delete workspace
 workspaceRouter.delete('/:workspaceId', deleteWorkspace);
 
-// Ensure default workspace for a user
+// Ensure default workspace for a user - FIXED
 workspaceRouter.post('/ensure-default', async (req, res) => {
   try {
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ message: 'userId is required' });
+    console.log('🔍 /ensure-default - Request received for user:', userId);
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'userId is required' 
+      });
+    }
 
     const workspace = await ensureDefaultWorkspace(userId);
-    res.json({ workspace });
+    
+    if (!workspace) {
+      console.log('❌ /ensure-default - Failed to ensure default workspace for user:', userId);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to ensure default workspace' 
+      });
+    }
+
+    console.log('✅ /ensure-default - Success for user:', userId, 'workspace:', workspace.id);
+    
+    res.json({ 
+      success: true, 
+      workspace,
+      message: 'Default workspace ensured successfully'
+    });
+    
   } catch (error) {
-    console.error('Error ensuring default workspace:', error);
-    res.status(500).json({ message: error.message || 'Internal server error' });
+    console.error('❌ /ensure-default - Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Internal server error' 
+    });
   }
 });
 
