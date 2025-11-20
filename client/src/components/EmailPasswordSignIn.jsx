@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useSignIn, useClerk } from '@clerk/clerk-react';
+import { useSignIn, useClerk, useSession } from '@clerk/clerk-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Loader2Icon, Eye, EyeOff, LogOut } from 'lucide-react';
 
 const EmailPasswordSignIn = () => {
     const { isLoaded, signIn, setActive } = useSignIn();
-    const { signOut } = useClerk();
+    const { signOut, session } = useClerk();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -14,53 +14,68 @@ const EmailPasswordSignIn = () => {
     const [hasExistingSession, setHasExistingSession] = useState(false);
     const navigate = useNavigate();
 
-    // Check for existing session
+    // 🆕 Check for existing session on component load
     useEffect(() => {
-        const checkSession = async () => {
+        const checkExistingSession = async () => {
+            if (!isLoaded) return;
+            
             try {
-                // Try to get current session
+                // Check if there's an active session
                 const currentSession = await signIn?.client?.getSession();
+                console.log('🔍 Session check:', { 
+                    hasSession: !!currentSession,
+                    sessionId: currentSession?.id 
+                });
+                
                 if (currentSession) {
-                    console.log('⚠️ Active session detected');
+                    console.log('⚠️ Active session detected:', currentSession.id);
                     setHasExistingSession(true);
+                    toast.warning('You already have an active session. Please sign out first.');
                 }
             } catch (error) {
-                // No active session
+                console.log('No active session found');
                 setHasExistingSession(false);
             }
         };
 
-        if (isLoaded) {
-            checkSession();
-        }
+        checkExistingSession();
     }, [isLoaded, signIn]);
 
     const togglePasswordVisibility = () => {
         setShowPassword(!showPassword);
     };
 
+    // 🆕 Enhanced session reset
     const handleResetSession = async () => {
         try {
             setLoading(true);
+            console.log('🔄 Resetting session...');
+            
+            // Sign out from Clerk
             await signOut();
             
             // Clear all storage
             localStorage.clear();
             sessionStorage.clear();
             
-            // Clear cookies
+            // Clear Clerk cookies specifically
             document.cookie.split(";").forEach((c) => {
-                document.cookie = c
-                    .replace(/^ +/, "")
-                    .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                const cookie = c.trim();
+                if (cookie.startsWith('__session') || cookie.startsWith('__client')) {
+                    document.cookie = cookie + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+                }
             });
 
+            console.log('✅ Session reset complete');
             setHasExistingSession(false);
             toast.success('Session reset successfully!');
             
+            // Force reload to clear all Clerk state
+            window.location.reload();
+            
         } catch (error) {
-            console.error('Error resetting session:', error);
-            toast.error('Error resetting session');
+            console.error('❌ Error resetting session:', error);
+            toast.error('Error resetting session. Try clearing browser data.');
         } finally {
             setLoading(false);
         }
@@ -70,7 +85,7 @@ const EmailPasswordSignIn = () => {
         e.preventDefault();
         
         if (hasExistingSession) {
-            toast.error('Please reset your session first to sign in with a different account.');
+            toast.error('Please reset your session first to sign in.');
             return;
         }
 
@@ -85,6 +100,8 @@ const EmailPasswordSignIn = () => {
                 identifier: email,
                 password,
             });
+
+            console.log('🔍 Sign in result:', result);
 
             if (result.status === 'complete') {
                 await setActive({ session: result.createdSessionId });
@@ -103,7 +120,7 @@ const EmailPasswordSignIn = () => {
                 navigate('/sign-up');
             } else if (errorMessage.includes('password')) {
                 toast.error('Invalid password. Please try again.');
-            } else if (errorMessage.includes('signed in')) {
+            } else if (errorMessage.includes('signed in') || errorMessage.includes('already signed in')) {
                 toast.error('You are already signed in. Please reset your session first.');
                 setHasExistingSession(true);
             } else {
@@ -114,7 +131,7 @@ const EmailPasswordSignIn = () => {
         }
     };
 
-    // Show session reset UI if user has existing session
+    // 🆕 Show session reset UI if user has existing session
     if (hasExistingSession) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-950 p-4">
@@ -138,29 +155,50 @@ const EmailPasswordSignIn = () => {
                                     Reset Required
                                 </h3>
                                 <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
-                                    This will sign you out of all active sessions.
+                                    This will sign you out of all active sessions and clear your browser data.
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <button
-                        onClick={handleResetSession}
-                        disabled={loading}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
-                                Resetting Session...
-                            </>
-                        ) : (
-                            <>
-                                <LogOut className="w-4 h-4 mr-2" />
-                                Reset Session & Sign Out
-                            </>
-                        )}
-                    </button>
+                    <div className="space-y-4">
+                        <button
+                            onClick={handleResetSession}
+                            disabled={loading}
+                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
+                        >
+                            {loading ? (
+                                <>
+                                    <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
+                                    Resetting Session...
+                                </>
+                            ) : (
+                                <>
+                                    <LogOut className="w-4 h-4 mr-2" />
+                                    Reset Session & Sign Out
+                                </>
+                            )}
+                        </button>
+
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700"
+                        >
+                            Refresh Page
+                        </button>
+                    </div>
+
+                    <div className="text-center">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Still having issues? Try opening in a{" "}
+                            <button 
+                                onClick={() => window.open(window.location.href, '_blank')}
+                                className="text-blue-600 hover:text-blue-500 underline"
+                            >
+                                new incognito window
+                            </button>
+                        </p>
+                    </div>
                 </div>
             </div>
         );
