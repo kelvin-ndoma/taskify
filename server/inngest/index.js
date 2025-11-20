@@ -490,12 +490,9 @@ const sendWorkspaceInvitationEmail = inngest.createFunction(
     const { workspaceId, inviteeEmail, inviterName, origin, role } = event.data;
 
     try {
-      // Get workspace details
       const workspace = await prisma.workspace.findUnique({
         where: { id: workspaceId },
-        include: {
-          owner: true,
-        },
+        include: { owner: true },
       });
 
       if (!workspace) {
@@ -505,60 +502,56 @@ const sendWorkspaceInvitationEmail = inngest.createFunction(
 
       console.log(`📧 Sending workspace invitation to: ${inviteeEmail}`);
 
+      // Use Clerk's sign-up URL with redirect to your app
+      const clerkSignUpUrl = `https://accounts.tbbasco.com/sign-up?redirect_url=${encodeURIComponent(origin)}`;
+
       await sendEmail({
         to: inviteeEmail,
         subject: `You've been invited to join ${workspace.name}`,
-      // In your Inngest function - update the email body
-                body: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                  <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="color: #333; margin-bottom: 10px;">🏢 Workspace Invitation</h1>
-                    <p style="color: #666; font-size: 16px;">You've been invited to join a workspace</p>
-                  </div>
+        body: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #333; margin-bottom: 10px;">🏢 Workspace Invitation</h1>
+            <p style="color: #666; font-size: 16px;">You've been invited to join ${workspace.name}</p>
+          </div>
 
-                  <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 25px;">
-                    <h2 style="color: #007bff; margin: 0 0 15px 0;">${workspace.name}</h2>
-                    
-                    <div style="margin: 15px 0;">
-                      <p style="color: #555; margin: 0; line-height: 1.5;">
-                        <strong>${inviterName}</strong> has invited you to join the <strong>${workspace.name}</strong> workspace as a <strong>${role}</strong>.
-                      </p>
-                    </div>
-                    
-                    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 12px; margin: 15px 0;">
-                      <p style="color: #856404; margin: 0; font-weight: bold;">
-                        📝 You need to create an account to accept this invitation
-                      </p>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
-                      <div>
-                        <strong style="color: #333; display: block;">Invited By</strong>
-                        <span style="color: #666;">${inviterName}</span>
-                      </div>
-                      <div>
-                        <strong style="color: #333; display: block;">Your Role</strong>
-                        <span style="color: #666; text-transform: capitalize;">${role.toLowerCase()}</span>
-                      </div>
-                    </div>
-                  </div>
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 25px;">
+            <h2 style="color: #007bff; margin: 0 0 15px 0;">${workspace.name}</h2>
+            
+            <div style="margin: 15px 0;">
+              <p style="color: #555; margin: 0; line-height: 1.5;">
+                <strong>${inviterName}</strong> has invited you to join as a <strong>${role}</strong>.
+              </p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+              <div>
+                <strong style="color: #333; display: block;">Invited By</strong>
+                <span style="color: #666;">${inviterName}</span>
+              </div>
+              <div>
+                <strong style="color: #333; display: block;">Your Role</strong>
+                <span style="color: #666; text-transform: capitalize;">${role.toLowerCase()}</span>
+              </div>
+            </div>
+          </div>
 
-                  <div style="text-align: center; margin: 30px 0;">
-                    <p style="color: #666; margin-bottom: 15px;">
-                      To accept this invitation, please sign up for an account:
-                    </p>
-                    <a href="${origin}/sign-up" 
-                      style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-                      Sign Up to Accept
-                    </a>
-                  </div>
+          <div style="text-align: center; margin: 30px 0;">
+            <p style="color: #666; margin-bottom: 15px;">
+              Click the button below to create your account and join the workspace:
+            </p>
+            <a href="${clerkSignUpUrl}" 
+              style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+              Create Account & Join
+            </a>
+          </div>
 
-                  <div style="border-top: 1px solid #e0e0e0; padding-top: 20px; text-align: center;">
-                    <p style="color: #999; font-size: 12px; margin: 0;">
-                      If you believe you received this invitation by mistake, please ignore this email.
-                    </p>
-                  </div>
-                </div> `, 
+          <div style="border-top: 1px solid #e0e0e0; padding-top: 20px; text-align: center;">
+            <p style="color: #999; font-size: 12px; margin: 0;">
+              This invitation will expire in 7 days. If you received this by mistake, please ignore this email.
+            </p>
+          </div>
+        </div>`, 
       });
 
       console.log(`✅ Workspace invitation email sent to: ${inviteeEmail}`);
