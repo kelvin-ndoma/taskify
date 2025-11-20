@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom' // Add useNavigate
 import { useDispatch, useSelector } from 'react-redux'
 import { loadTheme } from '../features/themeSlice'
 import { fetchWorkspaces } from '../features/workspaceSlice'
 import { Loader2Icon } from 'lucide-react'
-import { useUser, useAuth } from '@clerk/clerk-react'
+import { useUser, useAuth, SignIn } from '@clerk/clerk-react' // Add SignIn back
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -14,6 +14,7 @@ const Layout = () => {
     const dispatch = useDispatch()
     const { user, isLoaded } = useUser()
     const { getToken } = useAuth()
+    const navigate = useNavigate() // Add navigate
 
     // Initial load of theme
     useEffect(() => {
@@ -28,17 +29,32 @@ const Layout = () => {
         }
     }, [user, isLoaded, getToken, dispatch])
 
+    // Redirect to sign-in if user signs out
+    useEffect(() => {
+        if (isLoaded && !user) {
+            console.log('🚪 User signed out, redirecting to sign-in')
+            navigate('/sign-in')
+        }
+    }, [user, isLoaded, navigate])
+
     // Debug log
     useEffect(() => {
-        if (initialized && !loading) {
+        if (initialized && !loading && user) {
             console.log('✅ Layout: Rendering main layout -', { 
                 workspacesCount: workspaces?.length,
                 currentWorkspace: currentWorkspace?.name 
             })
         }
-    }, [initialized, loading, workspaces, currentWorkspace])
+    }, [initialized, loading, workspaces, currentWorkspace, user])
 
-    // REMOVED: The authentication check - this is now handled by routes
+    // Show sign-in if no user (this handles the case where navigate hasn't happened yet)
+    if(!user){
+        return(
+            <div className='flex justify-center items-center h-screen bg-white dark:bg-zinc-950'>
+                <SignIn />
+            </div>
+        )
+    }
 
     // Show loading only if not initialized OR still loading
     if (!initialized || loading) {

@@ -13,7 +13,7 @@ const App = () => {
         <>
             <Toaster />
             <Routes>
-                {/* Add authentication routes OUTSIDE the Layout */}
+                {/* Public routes */}
                 <Route 
                     path="/sign-in" 
                     element={
@@ -26,13 +26,13 @@ const App = () => {
                     path="/sign-up" 
                     element={
                         <div className='flex justify-center items-center min-h-screen bg-white dark:bg-zinc-950'>
-                            <SignUp />  {/* ← Use SignUp component here */}
+                            <SignUp />
                         </div>
                     } 
                 />
                 
-                {/* Protected routes inside Layout */}
-                <Route path="/" element={<Layout />}>
+                {/* Protected routes - Layout handles authentication */}
+                <Route path="/*" element={<Layout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="team" element={<Team />} />
                     <Route path="projects" element={<Projects />} />
