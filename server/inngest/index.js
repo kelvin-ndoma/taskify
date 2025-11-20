@@ -94,6 +94,8 @@ const syncUserCreation = inngest.createFunction(
         console.log(`✅ Added ${user.name} as ADMIN to newly created default workspace`);
         
       } else {
+        console.log(`✅ Found existing default workspace: ${defaultWorkspace.name} (ID: ${defaultWorkspace.id})`);
+        
         // Check if user already in the default workspace
         const existingMembership = await prisma.workspaceMember.findFirst({
           where: {
@@ -117,6 +119,13 @@ const syncUserCreation = inngest.createFunction(
       }
     } catch (error) {
       console.error("❌ Error creating user:", error);
+      
+      // Log specific Prisma errors for better debugging
+      if (error.code === 'P2002') {
+        console.error('🔑 Unique constraint violation - user might already exist');
+      } else if (error.code === 'P2025') {
+        console.error('❌ Record not found');
+      }
     }
   }
 );
