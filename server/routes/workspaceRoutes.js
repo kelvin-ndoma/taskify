@@ -19,7 +19,8 @@ workspaceRouter.get('/', getUserWorkspaces);
 // Get specific workspace by ID
 workspaceRouter.get('/:workspaceId', getWorkspaceById);
 
-workspaceRouter.post('/add-member', addMember)
+// Add member to workspace
+workspaceRouter.post('/:workspaceId/members', addMember);
 
 // Remove member from workspace
 workspaceRouter.delete('/:workspaceId/members/:userId', removeMember);
