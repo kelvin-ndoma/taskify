@@ -28,6 +28,12 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    console.log('🔍 INVITE_DEBUG - Current Workspace:', {
+    id: currentWorkspace?.id,
+    name: currentWorkspace?.name,
+    fromRedux: currentWorkspace
+  });
+
     if (!email.trim()) {
       toast.error("Please enter an email address");
       return;
@@ -36,6 +42,7 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
       toast.error("Please enter a valid email address");
       return;
     }
+
     if (!currentWorkspace?.id) {
       toast.error("No workspace selected");
       return;
