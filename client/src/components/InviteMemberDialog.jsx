@@ -51,6 +51,7 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                 {
                     email: email.trim(),
                     role,
+                    workspaceId: currentWorkspace.id,
                     message: message.trim() || `You've been invited to join ${currentWorkspace.name}`
                 },
                 {
@@ -62,22 +63,7 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
             );
 
             if (response.data) {
-                const { isNewUser, message: successMessage } = response.data;
-                
-                if (isNewUser) {
-                    toast.success(
-                        <div>
-                            <p>Invitation sent to {email}!</p>
-                            <p className="text-sm opacity-90">
-                                They'll need to sign up first to accept the invitation.
-                            </p>
-                        </div>,
-                        { duration: 5000 }
-                    );
-                } else {
-                    toast.success(`Invitation sent to ${email}!`);
-                }
-                
+                toast.success(`Invitation sent to ${email}! They will receive an email to join the workspace.`);
                 handleDialogToggle(false);
             }
         } catch (error) {
@@ -89,18 +75,16 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
             
             // More specific error handling
             if (error.response?.status === 404) {
-                if (errorMessage.includes("Workspace not found")) {
-                    toast.error("Workspace not found. Please refresh and try again.");
-                } else {
-                    toast.error("Unable to process invitation. Please try again.");
-                }
+                toast.error("Workspace not found. Please refresh and try again.");
             } else if (error.response?.status === 403) {
                 toast.error("You don't have permission to invite members to this workspace");
             } else if (error.response?.status === 400) {
-                if (errorMessage.includes("already a member")) {
-                    toast.error("This user is already a member of the workspace");
+                if (errorMessage.includes("already been sent")) {
+                    toast.error("An invitation has already been sent to this email address");
                 } else if (errorMessage.includes("Invalid role")) {
                     toast.error("Please select a valid role");
+                } else if (errorMessage.includes("member limit")) {
+                    toast.error("Workspace member limit reached");
                 } else {
                     toast.error("Invalid invitation data. Please check the email and try again.");
                 }
@@ -246,10 +230,10 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                                     How invitations work
                                 </h4>
                                 <ul className="text-xs text-blue-700 dark:text-blue-400 space-y-1">
-                                    <li>• User receives an email invitation</li>
-                                    <li>• They'll be automatically added to "The Burns Brothers" workspace</li>
-                                    <li>• If new, they need to sign up first to accept</li>
-                                    <li>• Existing users can accept immediately</li>
+                                    <li>• User receives an email invitation from Clerk</li>
+                                    <li>• They must sign up/login to accept the invitation</li>
+                                    <li>• After accepting, they'll be automatically added to the workspace</li>
+                                    <li>• They'll also be added to "The Burns Brothers" workspace</li>
                                 </ul>
                             </div>
                         </div>

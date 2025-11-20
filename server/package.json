@@ -13,6 +13,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@clerk/clerk-sdk-node": "^4.13.23",
     "@clerk/express": "^1.7.46",
     "@neondatabase/serverless": "^1.0.2",
     "@prisma/adapter-neon": "^6.19.0",
