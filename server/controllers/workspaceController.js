@@ -54,7 +54,6 @@ export const getUserWorkspaces = async (req, res) => {
 };
 
 // Add member (invite logic, no fake user creation)
-// In workspaceController.js - FIX the addMember function
 export const addMember = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -92,7 +91,7 @@ export const addMember = async (req, res) => {
     // Check if user exists
     let user = await prisma.user.findUnique({ where: { email } });
 
-    // ✅ FIX: If user doesn't exist, send invitation and return SUCCESS (not 404)
+    // ✅ FIX: If user doesn't exist, send invitation and return SUCCESS
     if (!user) {
       console.log('📧 User does not exist, sending invitation email to:', email);
       
@@ -110,7 +109,6 @@ export const addMember = async (req, res) => {
         },
       });
 
-      // ✅ RETURN SUCCESS - not 404!
       return res.status(200).json({
         success: true,
         message: "Invitation sent successfully! The user will receive an email to join the workspace.",
@@ -119,13 +117,23 @@ export const addMember = async (req, res) => {
       });
     }
 
-    console.log('✅ User exists:', user.name);
+    console.log('✅ User exists:', user.name, user.id);
 
-    // If user exists, check if they're already a member
+    // ✅ FIXED: Check if user is already a member of THIS SPECIFIC workspace
     const existingMember = workspace.members.find((m) => m.userId === user.id);
     if (existingMember) {
-      return res.status(400).json({ message: "User is already a member of this workspace" });
+      console.log('❌ User already member of this workspace:', {
+        userId: user.id,
+        workspaceId: workspaceId,
+        existingRole: existingMember.role
+      });
+      return res.status(400).json({ 
+        message: "User is already a member of this workspace",
+        existingRole: existingMember.role
+      });
     }
+
+    console.log('✅ User not in this workspace, adding them...');
 
     // Add existing user to workspace
     await ensureDefaultWorkspace(user.id);
@@ -142,13 +150,25 @@ export const addMember = async (req, res) => {
       },
     });
 
+    console.log('✅ Successfully added user to workspace:', {
+      userName: user.name,
+      workspaceName: workspace.name,
+      role: role
+    });
+
     res.json({
       member,
-      message: "Member added successfully",
+      message: `Member added successfully to ${workspace.name}`,
     });
 
   } catch (error) {
     console.error("❌ Error adding member:", error);
+    console.error("❌ Error details:", {
+      code: error.code,
+      message: error.message,
+      meta: error.meta
+    });
+    
     if (error.code === "P2002") {
       return res.status(400).json({
         message: "User is already a member of this workspace",
