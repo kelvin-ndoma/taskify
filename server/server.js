@@ -26,28 +26,19 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-app.use(express.json());
+// ✅ Remove the problematic line: app.options('*', cors());
+// The CORS middleware already handles OPTIONS requests automatically
 
-// ✅ EXCLUDE API ROUTES FROM CLERK MIDDLEWARE
-app.use((req, res, next) => {
-  // Skip Clerk middleware for your API routes
-  if (req.path.startsWith('/api/workspaces') || 
-      req.path.startsWith('/api/projects') ||
-      req.path.startsWith('/api/tasks') ||
-      req.path.startsWith('/api/comments')) {
-    return next();
-  }
-  // Apply Clerk middleware to all other routes
-  return clerkMiddleware()(req, res, next);
-});
+app.use(express.json());
+app.use(clerkMiddleware());
 
 // ✅ Health check route
 app.get('/', (req, res) => res.send('✅ Server is Live!'));
 
-// ✅ Inngest webhook route (this handles Clerk webhooks)
+// ✅ Inngest webhook route
 app.use('/api/inngest', serve({ client: inngest, functions }));
 
-// ✅ Mount your API routes WITHOUT Clerk middleware interference
+// ✅ Mount routes
 app.use('/api/workspaces', protect, workspaceRouter);
 app.use('/api/projects', protect, projectRouter);
 app.use('/api/tasks', protect, taskRouter);
