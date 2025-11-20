@@ -1,5 +1,6 @@
 // src/controllers/workspaceController.js
 import prisma from "../configs/prisma.js";
+import { inngest } from "../inngest/index.js"; // Make sure to import inngest
 
 // Get all workspaces for User
 export const getUserWorkspaces = async (req, res) => {
@@ -62,17 +63,24 @@ export const getUserWorkspaces = async (req, res) => {
   }
 };
 
-// Add member to workspace
 // Add member to workspace (with default workspace enforcement)
 export const addMember = async (req, res) => {
   try {
     const { userId } = await req.auth();
-    const { email, role, workspaceId, message } = req.body;
+    const { email, role, message } = req.body; // ✅ REMOVED workspaceId from body
+    const { workspaceId } = req.params; // ✅ FIXED: Get workspaceId from URL params
+
+    console.log('🎯 addMember function called:', {
+      params: req.params,
+      body: req.body,
+      workspaceIdFromParams: req.params.workspaceId,
+      authUserId: userId
+    });
 
     if (!email || !role || !workspaceId) {
-      return res
-        .status(400)
-        .json({ message: "Missing required fields: email, role, workspaceId" });
+      return res.status(400).json({ 
+        message: "Missing required fields: email, role" 
+      });
     }
 
     if (!["ADMIN", "MEMBER"].includes(role)) {
@@ -141,6 +149,7 @@ export const addMember = async (req, res) => {
       },
     });
 
+    let addedToDefault = false;
     if (!defaultWorkspaceMembership) {
       console.log(`➕ Adding user ${user.email} to default workspace first`);
       await prisma.workspaceMember.create({
@@ -151,6 +160,7 @@ export const addMember = async (req, res) => {
           message: "Auto-added via workspace invitation",
         },
       });
+      addedToDefault = true;
       console.log(`✅ User ${user.email} added to The Burns Brothers workspace`);
     } else {
       console.log(`ℹ️ User ${user.email} already in default workspace`);
@@ -173,8 +183,33 @@ export const addMember = async (req, res) => {
 
     console.log(`✅ User ${user.email} added to workspace ${workspace.name}`);
 
+    // ✅ Trigger email invitation
+    try {
+      // Get current user's name for the invitation
+      const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true }
+      });
+
+      await inngest.send({
+        name: "app/workspace.invitation",
+        data: {
+          workspaceId,
+          inviteeEmail: email,
+          inviterName: currentUser?.name || "Team Member",
+          origin: process.env.FRONTEND_URL || "https://www.tbbasco.com",
+          role
+        }
+      });
+      console.log(`📧 Invitation email triggered for ${email}`);
+    } catch (emailError) {
+      console.error('❌ Failed to trigger invitation email:', emailError);
+      // Don't fail the whole request if email fails
+    }
+
     res.json({ 
       member, 
+      addedToDefault,
       message: "Member added successfully. User has been automatically added to The Burns Brothers workspace." 
     });
   } catch (error) {

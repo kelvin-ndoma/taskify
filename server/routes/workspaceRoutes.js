@@ -13,10 +13,28 @@ import {
 
 const workspaceRouter = express.Router();
 
-// ✅ FIXED ORDER: Static routes first
+// Get all workspaces for current user
 workspaceRouter.get('/', getUserWorkspaces);
 
-// ✅ Ensure default workspace route - MOVED UP
+// Get specific workspace by ID
+workspaceRouter.get('/:workspaceId', getWorkspaceById);
+
+// Add member to workspace
+workspaceRouter.post('/:workspaceId/members', addMember);
+
+// Remove member from workspace
+workspaceRouter.delete('/:workspaceId/members/:userId', removeMember);
+
+// Update member role
+workspaceRouter.patch('/:workspaceId/members/:userId/role', updateMemberRole);
+
+// Update workspace
+workspaceRouter.put('/:workspaceId', updateWorkspace);
+
+// Delete workspace
+workspaceRouter.delete('/:workspaceId', deleteWorkspace);
+
+// Ensure default workspace for a user
 workspaceRouter.post('/ensure-default', async (req, res) => {
   try {
     const { userId } = req.body;
@@ -29,13 +47,5 @@ workspaceRouter.post('/ensure-default', async (req, res) => {
     res.status(500).json({ message: error.message || 'Internal server error' });
   }
 });
-
-// ✅ THEN parameterized routes
-workspaceRouter.get('/:workspaceId', getWorkspaceById);
-workspaceRouter.post('/:workspaceId/members', addMember);
-workspaceRouter.delete('/:workspaceId/members/:userId', removeMember);
-workspaceRouter.patch('/:workspaceId/members/:userId/role', updateMemberRole);
-workspaceRouter.put('/:workspaceId', updateWorkspace);
-workspaceRouter.delete('/:workspaceId', deleteWorkspace);
 
 export default workspaceRouter;
