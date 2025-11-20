@@ -6,7 +6,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { loadTheme } from '../features/themeSlice'
 import { fetchWorkspaces } from '../features/workspaceSlice'
 import { Loader2Icon } from 'lucide-react'
-import { useUser, SignIn, useAuth } from '@clerk/clerk-react'
+import { useUser, useAuth } from '@clerk/clerk-react'
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -28,7 +28,7 @@ const Layout = () => {
         }
     }, [user, isLoaded, getToken, dispatch])
 
-    // Debug log - moved outside of conditional rendering
+    // Debug log
     useEffect(() => {
         if (initialized && !loading) {
             console.log('✅ Layout: Rendering main layout -', { 
@@ -38,13 +38,7 @@ const Layout = () => {
         }
     }, [initialized, loading, workspaces, currentWorkspace])
 
-    if(!user){
-        return(
-            <div className='flex justify-center items-center h-screen bg-white dark:bg-zinc-950'>
-                <SignIn />
-            </div>
-        )
-    }
+    // REMOVED: The authentication check - this is now handled by routes
 
     // Show loading only if not initialized OR still loading
     if (!initialized || loading) {

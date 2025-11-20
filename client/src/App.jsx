@@ -6,16 +6,32 @@ import Projects from "./pages/Projects";
 import Team from "./pages/Team";
 import ProjectDetails from "./pages/ProjectDetails";
 import TaskDetails from "./pages/TaskDetails";
-import SignUpRedirect from "./components/SignUpRedirect"; // Add this import
+import { SignIn, SignUp } from "@clerk/clerk-react";
 
 const App = () => {
     return (
         <>
             <Toaster />
             <Routes>
-                {/* Add the sign-up route */}
-                <Route path="/sign-up" element={<SignUpRedirect />} />
+                {/* Add authentication routes OUTSIDE the Layout */}
+                <Route 
+                    path="/sign-in" 
+                    element={
+                        <div className='flex justify-center items-center min-h-screen bg-white dark:bg-zinc-950'>
+                            <SignIn />
+                        </div>
+                    } 
+                />
+                <Route 
+                    path="/sign-up" 
+                    element={
+                        <div className='flex justify-center items-center min-h-screen bg-white dark:bg-zinc-950'>
+                            <SignUp />  {/* ← Use SignUp component here */}
+                        </div>
+                    } 
+                />
                 
+                {/* Protected routes inside Layout */}
                 <Route path="/" element={<Layout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="team" element={<Team />} />
