@@ -26,8 +26,8 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// ✅ Handle OPTIONS requests for preflight
-app.options('*', cors());
+// ✅ Remove the problematic line: app.options('*', cors());
+// The CORS middleware already handles OPTIONS requests automatically
 
 app.use(express.json());
 app.use(clerkMiddleware());
