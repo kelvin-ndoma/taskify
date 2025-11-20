@@ -1,23 +1,79 @@
-import { useState } from 'react';
-import { useSignIn } from '@clerk/clerk-react';
+import { useState, useEffect } from 'react';
+import { useSignIn, useClerk } from '@clerk/clerk-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Loader2Icon, Eye, EyeOff } from 'lucide-react';
+import { Loader2Icon, Eye, EyeOff, LogOut } from 'lucide-react';
 
 const EmailPasswordSignIn = () => {
     const { isLoaded, signIn, setActive } = useSignIn();
+    const { signOut } = useClerk();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [hasExistingSession, setHasExistingSession] = useState(false);
     const navigate = useNavigate();
+
+    // Check for existing session
+    useEffect(() => {
+        const checkSession = async () => {
+            try {
+                // Try to get current session
+                const currentSession = await signIn?.client?.getSession();
+                if (currentSession) {
+                    console.log('⚠️ Active session detected');
+                    setHasExistingSession(true);
+                }
+            } catch (error) {
+                // No active session
+                setHasExistingSession(false);
+            }
+        };
+
+        if (isLoaded) {
+            checkSession();
+        }
+    }, [isLoaded, signIn]);
 
     const togglePasswordVisibility = () => {
         setShowPassword(!showPassword);
     };
 
+    const handleResetSession = async () => {
+        try {
+            setLoading(true);
+            await signOut();
+            
+            // Clear all storage
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Clear cookies
+            document.cookie.split(";").forEach((c) => {
+                document.cookie = c
+                    .replace(/^ +/, "")
+                    .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+
+            setHasExistingSession(false);
+            toast.success('Session reset successfully!');
+            
+        } catch (error) {
+            console.error('Error resetting session:', error);
+            toast.error('Error resetting session');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        if (hasExistingSession) {
+            toast.error('Please reset your session first to sign in with a different account.');
+            return;
+        }
+
         if (!isLoaded) {
             toast.error('Authentication not ready');
             return;
@@ -44,8 +100,12 @@ const EmailPasswordSignIn = () => {
             
             if (errorMessage.includes('not found')) {
                 toast.error('No account found with this email. Please sign up first.');
+                navigate('/sign-up');
             } else if (errorMessage.includes('password')) {
                 toast.error('Invalid password. Please try again.');
+            } else if (errorMessage.includes('signed in')) {
+                toast.error('You are already signed in. Please reset your session first.');
+                setHasExistingSession(true);
             } else {
                 toast.error(errorMessage);
             }
@@ -53,6 +113,58 @@ const EmailPasswordSignIn = () => {
             setLoading(false);
         }
     };
+
+    // Show session reset UI if user has existing session
+    if (hasExistingSession) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-950 p-4">
+                <div className="max-w-md w-full space-y-8">
+                    <div className="text-center">
+                        <h2 className="mt-6 text-3xl font-bold text-gray-900 dark:text-white">
+                            Active Session Detected
+                        </h2>
+                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                            You're already signed in. To sign in with a different account, please reset your session first.
+                        </p>
+                    </div>
+                    
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="flex-shrink-0">
+                                <LogOut className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                                    Reset Required
+                                </h3>
+                                <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
+                                    This will sign you out of all active sessions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={handleResetSession}
+                        disabled={loading}
+                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
+                    >
+                        {loading ? (
+                            <>
+                                <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
+                                Resetting Session...
+                            </>
+                        ) : (
+                            <>
+                                <LogOut className="w-4 h-4 mr-2" />
+                                Reset Session & Sign Out
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-950 p-4">

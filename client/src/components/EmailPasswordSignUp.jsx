@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useSignUp, useClerk } from '@clerk/clerk-react';
+import { useSignUp, useClerk, useSession } from '@clerk/clerk-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Loader2Icon, Eye, EyeOff } from 'lucide-react';
+import { Loader2Icon, Eye, EyeOff, LogOut } from 'lucide-react';
 
 const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
     const { isLoaded, signUp, setActive } = useSignUp();
-    const { client } = useClerk();
+    const { client, signOut } = useClerk();
+    const { session } = useSession();
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -18,36 +19,88 @@ const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [isInvitationFlow, setIsInvitationFlow] = useState(false);
+    const [hasExistingSession, setHasExistingSession] = useState(false);
     const navigate = useNavigate();
 
-    // Check if this is an invitation flow
+    // Check for existing session and invitation flow
     useEffect(() => {
+        console.log('🔍 Session status:', { 
+            hasSession: !!session, 
+            isLoaded,
+            invitationToken,
+            invitationCode 
+        });
+
+        if (session) {
+            console.log('⚠️ User already has an active session');
+            setHasExistingSession(true);
+        }
+
         if (invitationToken || invitationCode) {
             setIsInvitationFlow(true);
-            console.log('Invitation flow detected:', { invitationToken, invitationCode });
+            console.log('🎯 Invitation flow detected:', { invitationToken, invitationCode });
         }
-    }, [invitationToken, invitationCode]);
+    }, [session, isLoaded, invitationToken, invitationCode]);
 
     // Pre-fill email from invitation if available
     useEffect(() => {
         const getInvitationDetails = async () => {
-            if (invitationToken && client) {
+            if ((invitationToken || invitationCode) && client) {
                 try {
-                    const invitation = await client.signUp.get();
-                    if (invitation.emailAddress) {
-                        setFormData(prev => ({
-                            ...prev,
-                            email: invitation.emailAddress
-                        }));
+                    console.log('📧 Fetching invitation details...');
+                    
+                    // Try to get invitation details
+                    if (invitationToken) {
+                        const invitation = await client.signUp.get();
+                        console.log('Invitation details:', invitation);
+                        
+                        if (invitation.emailAddress) {
+                            setFormData(prev => ({
+                                ...prev,
+                                email: invitation.emailAddress
+                            }));
+                            console.log('✅ Pre-filled email from invitation:', invitation.emailAddress);
+                        }
                     }
                 } catch (error) {
-                    console.error('Error fetching invitation details:', error);
+                    console.error('❌ Error fetching invitation details:', error);
                 }
             }
         };
         
         getInvitationDetails();
-    }, [invitationToken, client]);
+    }, [invitationToken, invitationCode, client]);
+
+    // Handle session reset
+    const handleResetSession = async () => {
+        try {
+            setLoading(true);
+            console.log('🔄 Resetting session...');
+            
+            await signOut();
+            
+            // Clear all storage
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Clear cookies
+            document.cookie.split(";").forEach((c) => {
+                document.cookie = c
+                    .replace(/^ +/, "")
+                    .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+
+            console.log('✅ Session reset complete');
+            setHasExistingSession(false);
+            toast.success('Session reset. You can now sign up.');
+            
+        } catch (error) {
+            console.error('❌ Error resetting session:', error);
+            toast.error('Error resetting session. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleChange = (e) => {
         setFormData({
@@ -67,6 +120,11 @@ const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
+        if (hasExistingSession) {
+            toast.error('Please reset your session first to create a new account.');
+            return;
+        }
+
         if (formData.password !== formData.confirmPassword) {
             toast.error('Passwords do not match');
             return;
@@ -91,9 +149,15 @@ const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
         try {
             let result;
 
+            console.log('🚀 Starting sign-up process...', {
+                isInvitationFlow,
+                invitationToken,
+                email: formData.email
+            });
+
             if (isInvitationFlow && invitationToken) {
                 // Handle invitation acceptance flow
-                console.log('Processing invitation acceptance...');
+                console.log('🎯 Processing invitation acceptance...');
                 
                 result = await signUp.create({
                     emailAddress: formData.email,
@@ -113,7 +177,7 @@ const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
                 });
             }
 
-            console.log('Sign up result:', result);
+            console.log('✅ Sign up result:', result);
 
             if (result.status === 'complete') {
                 await setActive({ session: result.createdSessionId });
@@ -126,7 +190,7 @@ const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
                 
                 navigate('/');
             } else if (result.status === 'missing_requirements') {
-                console.log('Sign up requires additional steps:', result);
+                console.log('📧 Sign up requires email verification');
                 
                 await signUp.prepareEmailAddressVerification({
                     strategy: 'email_code',
@@ -135,18 +199,21 @@ const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
                 navigate('/verify-email');
                 toast.success('Verification code sent to your email!');
             } else {
-                console.error('Sign up incomplete:', result);
+                console.error('❌ Sign up incomplete:', result);
                 toast.error('Sign up failed. Please try again.');
             }
         } catch (err) {
-            console.error('Error signing up:', err);
+            console.error('❌ Error signing up:', err);
             const errorMessage = err.errors?.[0]?.message || 'Sign up failed';
             
-            if (errorMessage.includes('exists')) {
+            if (errorMessage.includes('exists') || errorMessage.includes('already')) {
                 toast.error('An account with this email already exists. Please sign in.');
                 navigate('/sign-in');
-            } else if (errorMessage.includes('invitation')) {
+            } else if (errorMessage.includes('invitation') || errorMessage.includes('ticket')) {
                 toast.error('Invalid or expired invitation. Please request a new one.');
+            } else if (errorMessage.includes('signed in')) {
+                toast.error('You are already signed in. Please sign out first.');
+                setHasExistingSession(true);
             } else {
                 toast.error(errorMessage);
             }
@@ -154,6 +221,67 @@ const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
             setLoading(false);
         }
     };
+
+    // Show session reset UI if user has existing session
+    if (hasExistingSession) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-950 p-4">
+                <div className="max-w-md w-full space-y-8">
+                    <div className="text-center">
+                        <h2 className="mt-6 text-3xl font-bold text-gray-900 dark:text-white">
+                            Session Detected
+                        </h2>
+                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                            You already have an active session. To create a new account, please reset your session first.
+                        </p>
+                    </div>
+                    
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="flex-shrink-0">
+                                <LogOut className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                                    Reset Required
+                                </h3>
+                                <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
+                                    This will sign you out of all active sessions and clear your browser data.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <button
+                            onClick={handleResetSession}
+                            disabled={loading}
+                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
+                        >
+                            {loading ? (
+                                <>
+                                    <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
+                                    Resetting Session...
+                                </>
+                            ) : (
+                                <>
+                                    <LogOut className="w-4 h-4 mr-2" />
+                                    Reset Session & Sign Out
+                                </>
+                            )}
+                        </button>
+
+                        <button
+                            onClick={() => navigate('/sign-in')}
+                            className="w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700"
+                        >
+                            Go to Sign In Instead
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-950 p-4">
@@ -216,11 +344,11 @@ const EmailPasswordSignUp = ({ invitationToken, invitationCode }) => {
                                 required
                                 value={formData.email}
                                 onChange={handleChange}
-                                disabled={isInvitationFlow} // Email is pre-filled from invitation
+                                disabled={isInvitationFlow && formData.email}
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-zinc-800 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 placeholder="Enter your email"
                             />
-                            {isInvitationFlow && (
+                            {isInvitationFlow && formData.email && (
                                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                     Email is pre-filled from your invitation
                                 </p>
