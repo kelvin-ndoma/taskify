@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, UserPlus, Mail, Shield, Loader2, ExternalLink, MessageCircle } from "lucide-react";
+import { X, UserPlus, Mail, Shield, Loader2, ExternalLink } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
 import { useSelector } from "react-redux";
 import api from "../configs/api";
@@ -51,7 +51,7 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                 {
                     email: email.trim(),
                     role,
-                    message: message.trim() || `Invited to join ${currentWorkspace.name}`
+                    message: message.trim() || `You've been invited to join ${currentWorkspace.name}`
                 },
                 {
                     headers: { 
@@ -62,14 +62,14 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
             );
 
             if (response.data) {
-                const { isNewUser } = response.data;
+                const { isNewUser, message: successMessage } = response.data;
                 
                 if (isNewUser) {
                     toast.success(
                         <div>
                             <p>Invitation sent to {email}!</p>
                             <p className="text-sm opacity-90">
-                                They'll need to sign up first to access the workspace.
+                                They'll need to sign up first to accept the invitation.
                             </p>
                         </div>,
                         { duration: 5000 }
@@ -225,22 +225,16 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                     {/* Optional Message */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-2">
-                            Welcome Message (Optional)
+                            Personal Message (Optional)
                         </label>
-                        <div className="relative">
-                            <MessageCircle className="absolute left-3 top-3 text-gray-400 dark:text-zinc-500 w-4 h-4" />
-                            <textarea
-                                value={message}
-                                onChange={(e) => setMessage(e.target.value)}
-                                placeholder={`Welcome to ${currentWorkspace?.name}! We're excited to collaborate with you...`}
-                                disabled={isLoading}
-                                rows={3}
-                                className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:opacity-50"
-                            />
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
-                            This message will be saved with their workspace membership
-                        </p>
+                        <textarea
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            placeholder={`Welcome to ${currentWorkspace?.name}! We're excited to have you on board.`}
+                            disabled={isLoading}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:opacity-50"
+                        />
                     </div>
 
                     {/* Information Box */}
@@ -254,9 +248,8 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                                 <ul className="text-xs text-blue-700 dark:text-blue-400 space-y-1">
                                     <li>• User receives an email invitation</li>
                                     <li>• They'll be automatically added to "The Burns Brothers" workspace</li>
-                                    <li>• If new, they need to sign up first to access the workspace</li>
-                                    <li>• Existing users get immediate access</li>
-                                    <li>• Welcome message is saved with their membership</li>
+                                    <li>• If new, they need to sign up first to accept</li>
+                                    <li>• Existing users can accept immediately</li>
                                 </ul>
                             </div>
                         </div>
