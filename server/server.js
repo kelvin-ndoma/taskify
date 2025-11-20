@@ -34,7 +34,7 @@ app.get('/', (req, res) => res.send('✅ Server is Live!'));
 app.use('/api/inngest', serve({ client: inngest, functions }));
 
 // ✅ Mount routes
-app.use('/api/workspaces', workspaceRouter);
+app.use('/api/workspaces', protect, workspaceRouter);
 app.use('/api/projects', protect, projectRouter);
 app.use('/api/tasks', protect, taskRouter);
 app.use('/api/comments', protect, commentRouter);
