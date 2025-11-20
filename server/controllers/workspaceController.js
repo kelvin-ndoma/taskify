@@ -63,7 +63,7 @@ export const getUserWorkspaces = async (req, res) => {
   }
 };
 
-// Add member to workspace (with default workspace enforcement)
+// 🎯 FIXED: Add member to workspace - Get workspaceId from URL params
 export const addMember = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -87,13 +87,23 @@ export const addMember = async (req, res) => {
       return res.status(400).json({ message: "Invalid role" });
     }
 
-    // Get or create user
+    // 🎯 FIXED: Get or create user - allow placeholder users
     let user = await prisma.user.findUnique({ where: { email } });
     
     if (!user) {
-      return res.status(404).json({ 
-        message: "User not found. They must sign up first before being invited to workspaces." 
+      console.log(`🆕 User with email ${email} not found, creating placeholder user...`);
+      
+      // Create a placeholder user that can be updated later when they sign up
+      user = await prisma.user.create({
+        data: {
+          // Generate a temporary ID
+          id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          email: email,
+          name: email.split('@')[0], // Use email username as temporary name
+          image: "",
+        },
       });
+      console.log(`✅ Created placeholder user: ${user.id} for email: ${email}`);
     }
 
     const workspace = await prisma.workspace.findUnique({
@@ -105,24 +115,34 @@ export const addMember = async (req, res) => {
       return res.status(404).json({ message: "Workspace not found" });
     }
 
-    // Check permissions
-    const isAdmin = workspace.members.some(
-      (m) => m.userId === userId && m.role === "ADMIN"
-    );
+    // 🎯 FIXED: Enhanced permission check with debugging
+    const currentUserMembership = workspace.members.find((m) => m.userId === userId);
+    const isAdmin = currentUserMembership?.role === "ADMIN";
     const isOwner = workspace.ownerId === userId;
     
+    console.log('🔍 Permission Check:', {
+      workspaceId,
+      authUserId: userId,
+      workspaceOwnerId: workspace.ownerId,
+      currentUserRole: currentUserMembership?.role,
+      isAdmin,
+      isOwner,
+      canInvite: isAdmin || isOwner
+    });
+
     if (!isAdmin && !isOwner) {
-      return res
-        .status(403)
-        .json({ message: "You don't have permission to add members" });
+      console.log('❌ Permission Denied - User cannot invite members');
+      return res.status(403).json({ 
+        message: "You don't have permission to add members to this workspace" 
+      });
     }
 
     // Check if user is already in this workspace
     const existingMember = workspace.members.find((m) => m.userId === user.id);
     if (existingMember) {
-      return res
-        .status(400)
-        .json({ message: "User is already a member of this workspace" });
+      return res.status(400).json({ 
+        message: "User is already a member of this workspace" 
+      });
     }
 
     // 🔥 CRITICAL: Ensure user is in default workspace first
@@ -197,7 +217,7 @@ export const addMember = async (req, res) => {
           workspaceId,
           inviteeEmail: email,
           inviterName: currentUser?.name || "Team Member",
-          origin: process.env.FRONTEND_URL || "https://www.tbbasco.com",
+          origin: process.env.FRONTEND_URL || "http://localhost:3000",
           role
         }
       });
@@ -210,7 +230,8 @@ export const addMember = async (req, res) => {
     res.json({ 
       member, 
       addedToDefault,
-      message: "Member added successfully. User has been automatically added to The Burns Brothers workspace." 
+      isNewUser: !user.name || user.name === email.split('@')[0], // Indicate if this is a new placeholder user
+      message: "Invitation sent successfully! The user will receive an email invitation." 
     });
   } catch (error) {
     console.error("Error adding member:", error);
@@ -223,7 +244,7 @@ export const addMember = async (req, res) => {
     }
     
     res.status(500).json({ 
-      message: error.message || "Failed to add member to workspace" 
+      message: error.message || "Failed to send invitation" 
     });
   }
 };
