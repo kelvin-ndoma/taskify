@@ -13,7 +13,7 @@ import { protect } from './middlewares/authMiddleware.js';
 
 const app = express();
 
-// ✅ Enhanced CORS configuration
+// ✅ Simple CORS configuration
 app.use(cors({
     origin: [
         'https://tbb-project-management.vercel.app',
@@ -21,13 +21,8 @@ app.use(cors({
         'http://127.0.0.1:5173', 
         'http://localhost:5173'
     ],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    credentials: true
 }));
-
-// ✅ Remove the problematic line: app.options('*', cors());
-// The CORS middleware already handles OPTIONS requests automatically
 
 app.use(express.json());
 app.use(clerkMiddleware());
