@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check, Plus, Trash2 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
-import { setCurrentWorkspace, fetchWorkspaces } from "../features/workspaceSlice";
+import { setCurrentWorkspace, addWorkspace, fetchWorkspaces } from "../features/workspaceSlice";
 import { useNavigate } from "react-router-dom";
 import { useClerk, useUser, useAuth } from "@clerk/clerk-react";
 
@@ -17,70 +17,75 @@ function WorkspaceDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [imageErrors, setImageErrors] = useState({});
 
-  // Always use workspaces and currentWorkspace from Redux
   const workspaces = useSelector((state) => state.workspace.workspaces ?? []);
   const currentWorkspace = useSelector((state) => state.workspace.currentWorkspace ?? null);
   const currentUserId = user?.id;
 
-  // Make currentWorkspace always an actual workspace from state
-  const workspaceObj = workspaces.find(ws => ws.id === currentWorkspace?.id) || workspaces[0] || null;
-
   // Image error handler
   const handleImageError = (workspaceId) => {
+    console.log(`Image failed to load for workspace: ${workspaceId}`);
     setImageErrors(prev => ({ ...prev, [workspaceId]: true }));
   };
 
-  useEffect(() => { setImageErrors({}); }, [workspaces]);
+  // Clear image errors when workspaces change
+  useEffect(() => {
+    setImageErrors({});
+  }, [workspaces]);
 
-  // Organization creation sync
+  // 🆕 Handle new workspace creation and navigation
   useEffect(() => {
     const handleOrganizationCreated = async (organization) => {
+      console.log('🎯 New organization created:', organization);
+      
       try {
         const token = await getToken();
-        await dispatch(fetchWorkspaces({ getToken }));
+        dispatch(fetchWorkspaces({ getToken }));
+        
         setTimeout(() => {
           if (organization?.id) {
-            const createdWs = workspaces.find(ws => ws.id === organization.id);
-            dispatch(setCurrentWorkspace(createdWs || organization));
+            dispatch(setCurrentWorkspace(organization.id));
             navigate("/");
+            console.log('✅ Navigated to new workspace:', organization.name);
           }
         }, 1000);
+        
       } catch (error) {
         console.error('❌ Error handling new organization:', error);
       }
     };
+
     window.addEventListener('organizationCreated', (event) => {
       handleOrganizationCreated(event.detail);
     });
+
     return () => {
       window.removeEventListener('organizationCreated', handleOrganizationCreated);
     };
-    // Add workspaces to deps, so newly created one can be found in the list
-  }, [dispatch, getToken, navigate, workspaces]);
+  }, [dispatch, getToken, navigate]);
 
-  // Select workspace robustly
+  // Select workspace
   const onSelectWorkspace = (workspaceId) => {
-    const selected = workspaces.find(ws => ws.id === workspaceId);
-    if (selected) {
-      dispatch(setCurrentWorkspace(selected));
-      setIsOpen(false);
-      navigate("/");
-    }
+    dispatch(setCurrentWorkspace(workspaceId));
+    setIsOpen(false);
+    navigate("/");
   };
 
-  // Enhanced create workspace handler
+  // 🆕 Enhanced create workspace handler
   const handleCreateWorkspace = () => {
     openCreateOrganization();
     setIsOpen(false);
   };
 
-  // Delete workspace robustly
+  // Delete workspace
   const handleDeleteWorkspace = async (workspace, e) => {
     e.stopPropagation();
     if (!workspace?.id) return;
+
     if (!window.confirm(`Delete workspace "${workspace.name}"? This cannot be undone.`)) return;
+
     try {
       const token = await getToken();
+
       const res = await fetch(`${API_BASE}/api/workspaces/${workspace.id}`, {
         method: "DELETE",
         headers: {
@@ -88,14 +93,13 @@ function WorkspaceDropdown() {
           Authorization: `Bearer ${token}`,
         },
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || "Failed to delete workspace");
       }
-      await dispatch(fetchWorkspaces({ getToken }));
-      // After workspace deletion, set another as current
-      const nextWs = workspaces.filter(ws => ws.id !== workspace.id)[0] || null;
-      dispatch(setCurrentWorkspace(nextWs));
+
+      dispatch(fetchWorkspaces({ getToken }));
       alert("Workspace deleted successfully!");
     } catch (err) {
       alert(`Error: ${err.message}`);
@@ -113,8 +117,10 @@ function WorkspaceDropdown() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Helper function to render workspace image with fallback
   const renderWorkspaceImage = (workspace, size = 8) => {
     const hasValidImage = workspace?.image_url && !imageErrors[workspace.id];
+    
     if (hasValidImage) {
       return (
         <img
@@ -125,6 +131,7 @@ function WorkspaceDropdown() {
         />
       );
     }
+    
     return (
       <div className={`w-${size} h-${size} rounded bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 flex items-center justify-center text-sm font-medium text-white`}>
         {workspace?.name?.[0]?.toUpperCase() ?? "W"}
@@ -139,10 +146,10 @@ function WorkspaceDropdown() {
         className="w-full flex items-center justify-between p-3 text-left rounded hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors duration-200"
       >
         <div className="flex items-center gap-3 min-w-0">
-          {renderWorkspaceImage(workspaceObj, 8)}
+          {renderWorkspaceImage(currentWorkspace, 8)}
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-gray-800 dark:text-white text-sm truncate">
-              {workspaceObj?.name || "Select Workspace"}
+              {currentWorkspace?.name || "Select Workspace"}
             </p>
             <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
               {workspaces.length} workspace{workspaces.length !== 1 ? "s" : ""}
@@ -158,13 +165,15 @@ function WorkspaceDropdown() {
             <p className="text-xs text-gray-500 dark:text-zinc-400 uppercase tracking-wider mb-2 px-2 font-medium">
               Your Workspaces
             </p>
+
             {workspaces.map((workspace) => {
-              const isCurrent = workspaceObj?.id === workspace.id;
+              const isCurrent = currentWorkspace?.id === workspace.id;
               const isAdminOrOwner =
                 workspace.owner?.id === currentUserId ||
                 workspace.members?.some(
                   (m) => m.user.id === currentUserId && m.role === "ADMIN"
                 );
+
               return (
                 <div
                   key={workspace.id}
@@ -172,6 +181,7 @@ function WorkspaceDropdown() {
                   className="flex items-center gap-3 p-2 cursor-pointer rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors duration-200 group"
                 >
                   {renderWorkspaceImage(workspace, 6)}
+
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 dark:text-white truncate">
                       {workspace.name}
@@ -180,10 +190,12 @@ function WorkspaceDropdown() {
                       {workspace.members?.length ?? 0} member{workspace.members?.length !== 1 ? 's' : ''}
                     </p>
                   </div>
+
                   <div className="flex items-center gap-1">
                     {isCurrent && (
                       <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                     )}
+
                     {isAdminOrOwner && (
                       <Trash2
                         onClick={(e) => handleDeleteWorkspace(workspace, e)}
@@ -196,6 +208,7 @@ function WorkspaceDropdown() {
               );
             })}
           </div>
+
           <div className="border-t border-gray-200 dark:border-zinc-700">
             <div
               onClick={handleCreateWorkspace}
