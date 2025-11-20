@@ -54,25 +54,51 @@ export const getUserWorkspaces = async (req, res) => {
 };
 
 // Add member (invite logic, no fake user creation)
+// In workspaceController.js - FIX the addMember function
 export const addMember = async (req, res) => {
   try {
     const { userId } = await req.auth();
     const { email, role, workspaceId, message } = req.body;
 
+    console.log('🟢 ADD_MEMBER - Starting invitation for:', { email, workspaceId });
+
     if (!email || !role || !workspaceId) {
-      return res
-        .status(400)
-        .json({ message: "Missing required fields: email, role, workspaceId" });
+      return res.status(400).json({ message: "Missing required fields: email, role, workspaceId" });
     }
     if (!["ADMIN", "MEMBER"].includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
     }
 
+    // Check if workspace exists
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      include: { members: true, owner: true },
+    });
+    
+    if (!workspace) {
+      console.log('❌ Workspace not found:', workspaceId);
+      return res.status(404).json({ message: "Workspace not found" });
+    }
+
+    console.log('✅ Workspace found:', workspace.name);
+
+    // Check permissions
+    const isAdmin = workspace.members.some(m => m.userId === userId && m.role === "ADMIN");
+    const isOwner = workspace.ownerId === userId;
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ message: "You don't have permission to add members" });
+    }
+
+    // Check if user exists
     let user = await prisma.user.findUnique({ where: { email } });
 
-    // If the user does not exist: send invite, do NOT create user
+    // ✅ FIX: If user doesn't exist, send invitation and return SUCCESS (not 404)
     if (!user) {
+      console.log('📧 User does not exist, sending invitation email to:', email);
+      
       const inviter = await prisma.user.findUnique({ where: { id: userId } });
+      
+      // Send invitation email via Inngest
       await inngest.send({
         name: "app/workspace.invitation",
         data: {
@@ -83,37 +109,25 @@ export const addMember = async (req, res) => {
           role,
         },
       });
-      return res.status(404).json({
-        message:
-          "User not found. Invitation email sent. They must sign up first before being added to workspaces.",
+
+      // ✅ RETURN SUCCESS - not 404!
+      return res.status(200).json({
+        success: true,
+        message: "Invitation sent successfully! The user will receive an email to join the workspace.",
+        requiresSignup: true,
+        email: email.trim()
       });
     }
 
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: { members: true, owner: true },
-    });
-    if (!workspace) {
-      return res.status(404).json({ message: "Workspace not found" });
-    }
+    console.log('✅ User exists:', user.name);
 
-    const isAdmin = workspace.members.some(
-      (m) => m.userId === userId && m.role === "ADMIN"
-    );
-    const isOwner = workspace.ownerId === userId;
-    if (!isAdmin && !isOwner) {
-      return res
-        .status(403)
-        .json({ message: "You don't have permission to add members" });
-    }
-
+    // If user exists, check if they're already a member
     const existingMember = workspace.members.find((m) => m.userId === user.id);
     if (existingMember) {
-      return res
-        .status(400)
-        .json({ message: "User is already a member of this workspace" });
+      return res.status(400).json({ message: "User is already a member of this workspace" });
     }
 
+    // Add existing user to workspace
     await ensureDefaultWorkspace(user.id);
 
     const member = await prisma.workspaceMember.create({
@@ -130,11 +144,11 @@ export const addMember = async (req, res) => {
 
     res.json({
       member,
-      message:
-        "Member added successfully. User has been automatically added to The Burns Brothers workspace.",
+      message: "Member added successfully",
     });
+
   } catch (error) {
-    console.error("Error adding member:", error);
+    console.error("❌ Error adding member:", error);
     if (error.code === "P2002") {
       return res.status(400).json({
         message: "User is already a member of this workspace",

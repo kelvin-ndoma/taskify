@@ -25,102 +25,85 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+ // In InviteMemberDialog.js - update handleSubmit
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    console.log('🔍 INVITE_DEBUG - Current Workspace:', {
+  console.log('🔍 INVITE_DEBUG - Current Workspace:', {
     id: currentWorkspace?.id,
     name: currentWorkspace?.name,
-    fromRedux: currentWorkspace
   });
 
-    if (!email.trim()) {
-      toast.error("Please enter an email address");
-      return;
-    }
-    if (!isValidEmail(email)) {
-      toast.error("Please enter a valid email address");
-      return;
-    }
+  if (!email.trim()) {
+    toast.error("Please enter an email address");
+    return;
+  }
+  if (!isValidEmail(email)) {
+    toast.error("Please enter a valid email address");
+    return;
+  }
+  if (!currentWorkspace?.id) {
+    toast.error("No workspace selected");
+    return;
+  }
+  
+  setIsLoading(true);
 
-    if (!currentWorkspace?.id) {
-      toast.error("No workspace selected");
-      return;
-    }
-    setIsLoading(true);
+  try {
+    const token = await getToken();
 
-    try {
-      const token = await getToken();
-
-      const response = await api.post(
-        `/api/workspaces/${currentWorkspace.id}/members`,
-        {
-          email: email.trim(),
-          role,
-          workspaceId: currentWorkspace.id,
-          message:
-            message.trim() ||
-            `You've been invited to join ${currentWorkspace.name}`,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-          }
+    const response = await api.post(
+      `/api/workspaces/${currentWorkspace.id}/members`,
+      {
+        email: email.trim(),
+        role,
+        workspaceId: currentWorkspace.id,
+        message: message.trim() || `You've been invited to join ${currentWorkspace.name}`,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
         }
-      );
-
-      if (response.data) {
-        toast.success(
-          `Invitation sent to ${email}! They will receive an email to join the workspace.`
-        );
-        handleDialogToggle(false);
       }
-    } catch (error) {
-      console.error("Error inviting member:", error);
+    );
 
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to send invitation";
-
-      // Handle invitation sent (user must sign up)
-      if (
-        (error.response && [404,202].includes(error.response.status)) &&
-        errorMessage.toLowerCase().includes("invitation email sent")
-      ) {
-        toast.success(
-          "Invitation sent! The user must sign up before being added to this workspace."
-        );
-        handleDialogToggle(false);
-        return;
-      }
-
-      if (error.response?.status === 404) {
-        toast.error("Workspace not found. Please refresh and try again.");
-      } else if (error.response?.status === 403) {
-        toast.error(
-          "You don't have permission to invite members to this workspace"
-        );
-      } else if (error.response?.status === 400) {
-        if (errorMessage.includes("already been sent")) {
-          toast.error("An invitation has already been sent to this email address");
-        } else if (errorMessage.includes("Invalid role")) {
-          toast.error("Please select a valid role");
-        } else if (errorMessage.includes("member limit")) {
-          toast.error("Workspace member limit reached");
-        } else {
-          toast.error(
-            "Invalid invitation data. Please check the email and try again."
-          );
-        }
+    if (response.data) {
+      // ✅ Handle both cases: existing user OR new user invitation
+      if (response.data.requiresSignup) {
+        toast.success(`Invitation sent to ${email}! They will need to sign up first.`);
       } else {
-        toast.error(errorMessage);
+        toast.success(`Member ${response.data.member?.user?.name || email} added successfully!`);
       }
-    } finally {
-      setIsLoading(false);
+      handleDialogToggle(false);
     }
-  };
+  } catch (error) {
+    console.error("Error inviting member:", error);
+
+    const errorMessage = error.response?.data?.message || error.message || "Failed to send invitation";
+
+    // ✅ Simplified error handling
+    if (error.response?.status === 400) {
+      if (errorMessage.includes("already been sent") || errorMessage.includes("already a member")) {
+        toast.error("An invitation has already been sent to this email address");
+      } else if (errorMessage.includes("Invalid role")) {
+        toast.error("Please select a valid role");
+      } else if (errorMessage.includes("member limit")) {
+        toast.error("Workspace member limit reached");
+      } else {
+        toast.error("Invalid invitation data. Please check the email and try again.");
+      }
+    } else if (error.response?.status === 403) {
+      toast.error("You don't have permission to invite members to this workspace");
+    } else if (error.response?.status === 404) {
+      toast.error("Workspace not found. Please refresh and try again.");
+    } else {
+      toast.error(errorMessage);
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const isValidEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
