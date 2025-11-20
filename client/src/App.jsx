@@ -6,12 +6,16 @@ import Projects from "./pages/Projects";
 import Team from "./pages/Team";
 import ProjectDetails from "./pages/ProjectDetails";
 import TaskDetails from "./pages/TaskDetails";
+import SignUpRedirect from "./components/SignUpRedirect"; // Add this import
 
 const App = () => {
     return (
         <>
             <Toaster />
             <Routes>
+                {/* Add the sign-up route */}
+                <Route path="/sign-up" element={<SignUpRedirect />} />
+                
                 <Route path="/" element={<Layout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="team" element={<Team />} />
