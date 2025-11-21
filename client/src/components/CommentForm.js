@@ -1,6 +1,6 @@
 // components/CommentForm.js
 import React from 'react';
-import { PlusIcon, PaperclipIcon, LinkIcon, X } from "lucide-react";
+import { PlusIcon, PaperclipIcon, LinkIcon, X } from "lucide-react"; // ✅ Use X, not XIcon
 
 const CommentForm = ({
   newComment,
@@ -45,7 +45,12 @@ const CommentForm = ({
                 onChange={onLinkUrlChange}
                 placeholder="https://example.com"
                 className="flex-1 rounded dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), onAddCommentLink())}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onAddCommentLink();
+                  }
+                }}
               />
               <button
                 type="button"
@@ -74,7 +79,7 @@ const CommentForm = ({
                       onClick={() => onRemoveCommentLink(link.id)}
                       className="text-red-500 hover:text-red-700"
                     >
-                      <X className="size-3" />
+                      <X className="size-3" /> {/* ✅ FIXED: Use X instead of XIcon */}
                     </button>
                   </div>
                 ))}
