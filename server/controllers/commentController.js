@@ -1,4 +1,3 @@
-// controllers/commentController.js
 import prisma from "../configs/prisma.js";
 import { inngest } from "../inngest/index.js";
 
@@ -7,7 +6,7 @@ export const addComment = async (req, res) => {
   try {
     const { userId } = await req.auth();
     const origin = req.get("origin");
-    const { content, taskId, links = [] } = req.body; // 🆕 NEW: Added links parameter
+    const { content, taskId, links = [] } = req.body;
 
     // Validate input
     if (!taskId || !content) {
@@ -22,14 +21,14 @@ export const addComment = async (req, res) => {
       });
     }
 
-    // 🆕 NEW: Validate links if provided
+    // Validate links if provided
     if (links && Array.isArray(links)) {
       for (const link of links) {
         if (!link.url) {
           return res.status(400).json({ message: "Link URL is required for all links." });
         }
         try {
-          new URL(link.url); // Validate URL format
+          new URL(link.url);
         } catch (error) {
           return res.status(400).json({ message: `Invalid URL: ${link.url}` });
         }
@@ -69,61 +68,66 @@ export const addComment = async (req, res) => {
 
     // Create comment with transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Create comment (removed containsLinks since we're separating links)
-      const comment = await tx.comment.create({
-        data: { 
-          taskId, 
-          content: content.trim(), 
-          userId,
-        },
-        include: { 
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true
-            }
-          } 
-        },
-      });
-
-      // 🆕 NEW: Create comment links if provided
-      if (links && links.length > 0) {
-        await tx.commentLink.createMany({
-          data: links.map((link) => ({
-            url: link.url,
-            commentId: comment.id,
-            userId: userId,
-          })),
-        });
-      }
-
-      // Return comment with full details including links
-      return await tx.comment.findUnique({
-        where: { id: comment.id },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true
-            }
+      try {
+        // Create comment
+        const comment = await tx.comment.create({
+          data: { 
+            taskId, 
+            content: content.trim(), 
+            userId,
           },
-          links: { // 🆕 NEW: Include comment links
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  image: true,
+          include: { 
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            } 
+          },
+        });
+
+        // Create comment links if provided
+        if (links && links.length > 0) {
+          await tx.commentLink.createMany({
+            data: links.map((link) => ({
+              url: link.url,
+              commentId: comment.id,
+              userId: userId,
+            })),
+          });
+        }
+
+        // Return comment with full details including links
+        return await tx.comment.findUnique({
+          where: { id: comment.id },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            },
+            links: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true,
+                  },
                 },
               },
             },
           },
-        },
-      });
+        });
+      } catch (transactionError) {
+        console.error("Transaction error:", transactionError);
+        throw new Error("Failed to create comment with links");
+      }
     });
 
     console.log(`✅ Comment created: ${result.id} for task: ${taskId} with ${result.links.length} links`);
@@ -136,7 +140,7 @@ export const addComment = async (req, res) => {
           taskId: taskId,
           commentId: result.id,
           commenterId: userId,
-          containsLinks: result.links.length > 0, // 🆕 UPDATED: Check if links exist
+          containsLinks: result.links.length > 0,
           origin: origin || process.env.FRONTEND_URL || "http://localhost:3000",
         },
       });
@@ -160,7 +164,7 @@ export const updateComment = async (req, res) => {
   try {
     const { userId } = await req.auth();
     const { commentId } = req.params;
-    const { content, links } = req.body; // 🆕 NEW: Added links parameter
+    const { content, links } = req.body;
 
     if (!commentId || !content) {
       return res.status(400).json({ 
@@ -174,14 +178,14 @@ export const updateComment = async (req, res) => {
       });
     }
 
-    // 🆕 NEW: Validate links if provided
+    // Validate links if provided
     if (links && Array.isArray(links)) {
       for (const link of links) {
         if (!link.url) {
           return res.status(400).json({ message: "Link URL is required for all links." });
         }
         try {
-          new URL(link.url); // Validate URL format
+          new URL(link.url);
         } catch (error) {
           return res.status(400).json({ message: `Invalid URL: ${link.url}` });
         }
@@ -192,7 +196,7 @@ export const updateComment = async (req, res) => {
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
       include: {
-        links: true, // 🆕 NEW: Include existing links
+        links: true,
         task: {
           include: {
             project: {
@@ -227,58 +231,63 @@ export const updateComment = async (req, res) => {
 
     // Update comment with transaction
     const updatedComment = await prisma.$transaction(async (tx) => {
-      // Update comment (removed containsLinks)
-      const commentUpdate = await tx.comment.update({
-        where: { id: commentId },
-        data: { 
-          content: content.trim(),
-        },
-      });
-
-      // 🆕 NEW: Update comment links if provided
-      if (links !== undefined) {
-        // Delete all existing links for this comment
-        await tx.commentLink.deleteMany({
-          where: { commentId: commentId }
+      try {
+        // Update comment
+        const commentUpdate = await tx.comment.update({
+          where: { id: commentId },
+          data: { 
+            content: content.trim(),
+          },
         });
 
-        // Create new links
-        if (links.length > 0) {
-          await tx.commentLink.createMany({
-            data: links.map((link) => ({
-              url: link.url,
-              commentId: commentId,
-              userId: userId,
-            })),
+        // Update comment links if provided
+        if (links !== undefined) {
+          // Delete all existing links for this comment
+          await tx.commentLink.deleteMany({
+            where: { commentId: commentId }
           });
-        }
-      }
 
-      // Return updated comment with full details including links
-      return await tx.comment.findUnique({
-        where: { id: commentId },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true
-            }
-          },
-          links: { // 🆕 NEW: Include comment links
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  image: true,
+          // Create new links
+          if (links.length > 0) {
+            await tx.commentLink.createMany({
+              data: links.map((link) => ({
+                url: link.url,
+                commentId: commentId,
+                userId: userId,
+              })),
+            });
+          }
+        }
+
+        // Return updated comment with full details including links
+        return await tx.comment.findUnique({
+          where: { id: commentId },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            },
+            links: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true,
+                  },
                 },
               },
             },
           },
-        },
-      });
+        });
+      } catch (transactionError) {
+        console.error("Transaction error:", transactionError);
+        throw new Error("Failed to update comment with links");
+      }
     });
 
     console.log(`✅ Comment updated: ${commentId} with ${updatedComment.links.length} links`);
@@ -293,7 +302,7 @@ export const updateComment = async (req, res) => {
   }
 };
 
-// Get comments for a specific task - UPDATED to use CommentLink
+// Get comments for a specific task
 export const getTaskComments = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -345,7 +354,7 @@ export const getTaskComments = async (req, res) => {
             image: true
           }
         },
-        links: { // 🆕 UPDATED: Use CommentLink instead of LinkAttachment
+        links: {
           include: {
             user: {
               select: {
@@ -367,7 +376,7 @@ export const getTaskComments = async (req, res) => {
   }
 };
 
-// Get comment by ID - UPDATED to use CommentLink
+// Get comment by ID
 export const getComment = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -388,7 +397,7 @@ export const getComment = async (req, res) => {
             image: true
           }
         },
-        links: { // 🆕 UPDATED: Use CommentLink instead of LinkAttachment
+        links: {
           include: {
             user: {
               select: {
@@ -436,7 +445,7 @@ export const getComment = async (req, res) => {
   }
 };
 
-// Get all comments for a project - UPDATED to use CommentLink
+// Get all comments for a project
 export const getProjectComments = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -488,7 +497,7 @@ export const getProjectComments = async (req, res) => {
             image: true
           }
         },
-        links: { // 🆕 UPDATED: Use CommentLink instead of LinkAttachment
+        links: {
           include: {
             user: {
               select: {
@@ -517,7 +526,7 @@ export const getProjectComments = async (req, res) => {
   }
 };
 
-// Delete comment (no changes needed - cascade delete handles comment links)
+// Delete comment
 export const deleteComment = async (req, res) => {
   try {
     const { userId } = await req.auth();
