@@ -219,7 +219,7 @@ const TaskDetails = () => {
     }
   };
 
-  // Task handlers
+  // Task handlers - REMOVED fetchWorkspaces dispatches
   const handleUpdateTask = async () => {
     try {
       setTaskLoading(true);
@@ -247,7 +247,7 @@ const TaskDetails = () => {
       setIsEditingTask(false);
       toast.success("Task updated successfully!");
       
-      dispatch(fetchWorkspaces({ getToken }));
+      // REMOVED: dispatch(fetchWorkspaces({ getToken }));
       
     } catch (error) {
       console.error("Update task error:", error);
@@ -290,7 +290,7 @@ const TaskDetails = () => {
       setIsManagingAssignees(false);
       toast.success("Assignee added successfully!");
       
-      dispatch(fetchWorkspaces({ getToken }));
+      // REMOVED: dispatch(fetchWorkspaces({ getToken }));
       
     } catch (error) {
       console.error("Add assignee error:", error);
@@ -329,7 +329,7 @@ const TaskDetails = () => {
       setTask(safeTask);
       toast.success("Assignee removed successfully!");
       
-      dispatch(fetchWorkspaces({ getToken }));
+      // REMOVED: dispatch(fetchWorkspaces({ getToken }));
       
     } catch (error) {
       console.error("Remove assignee error:", error);

@@ -1,33 +1,44 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
-import { Outlet, useNavigate } from 'react-router-dom' // Add useNavigate
+import { Outlet, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { loadTheme } from '../features/themeSlice'
 import { fetchWorkspaces } from '../features/workspaceSlice'
 import { Loader2Icon } from 'lucide-react'
-import { useUser, useAuth, SignIn } from '@clerk/clerk-react' // Add SignIn back
+import { useUser, useAuth, SignIn } from '@clerk/clerk-react'
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+    const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
     const { loading, initialized, workspaces, currentWorkspace } = useSelector((state) => state.workspace)
     const dispatch = useDispatch()
     const { user, isLoaded } = useUser()
     const { getToken } = useAuth()
-    const navigate = useNavigate() // Add navigate
+    const navigate = useNavigate()
 
-    // Initial load of theme
+    // Initial load of theme - only once
     useEffect(() => {
         dispatch(loadTheme())
     }, [dispatch])
 
-    // Load workspaces when user is available
+    // Load workspaces only once when user is available
     useEffect(() => {
-        if (user && isLoaded && getToken) {
-            console.log('🔄 Layout: Dispatching fetchWorkspaces for user:', user.id)
-            dispatch(fetchWorkspaces({ getToken }))
+        const loadWorkspaces = async () => {
+            if (user && isLoaded && getToken && !workspacesLoaded) {
+                try {
+                    console.log('🔄 Layout: Dispatching fetchWorkspaces for user:', user.id)
+                    await dispatch(fetchWorkspaces({ getToken })).unwrap()
+                    setWorkspacesLoaded(true)
+                    console.log('✅ Workspaces loaded successfully')
+                } catch (error) {
+                    console.error('❌ Failed to load workspaces:', error)
+                }
+            }
         }
-    }, [user, isLoaded, getToken, dispatch])
+
+        loadWorkspaces()
+    }, [user, isLoaded, workspacesLoaded, dispatch]) // Remove getToken from dependencies
 
     // Redirect to sign-in if user signs out
     useEffect(() => {
@@ -37,27 +48,33 @@ const Layout = () => {
         }
     }, [user, isLoaded, navigate])
 
-    // Debug log
+    // Debug log - only log when actually relevant changes happen
     useEffect(() => {
         if (initialized && !loading && user) {
-            console.log('✅ Layout: Rendering main layout -', { 
+            console.log('✅ Layout: Main layout ready -', { 
                 workspacesCount: workspaces?.length,
                 currentWorkspace: currentWorkspace?.name 
             })
         }
-    }, [initialized, loading, workspaces, currentWorkspace, user])
+    }, [initialized, loading, workspaces?.length, currentWorkspace?.name, user])
 
-    // Show sign-in if no user (this handles the case where navigate hasn't happened yet)
-    if(!user){
-        return(
+    // Reset workspacesLoaded when user changes
+    useEffect(() => {
+        if (user) {
+            setWorkspacesLoaded(false)
+        }
+    }, [user?.id]) // Only reset when user ID changes
+
+    if (!user) {
+        return (
             <div className='flex justify-center items-center h-screen bg-white dark:bg-zinc-950'>
                 <SignIn />
             </div>
         )
     }
 
-    // Show loading only if not initialized OR still loading
-    if (!initialized || loading) {
+    // Show loading only if not initialized OR still loading AND we have a user
+    if ((!initialized || loading) && user) {
         console.log('⏳ Layout: Showing loader -', { loading, initialized })
         return (
             <div className='flex items-center justify-center h-screen bg-white dark:bg-zinc-950'>
