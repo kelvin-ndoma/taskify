@@ -1,4 +1,4 @@
-// TaskDetails.js
+// TaskDetails.jsx
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { useSelector, useDispatch } from "react-redux";
@@ -51,10 +51,10 @@ const TaskDetails = () => {
     if (!task || !user) return false;
     
     const isWorkspaceAdmin = currentWorkspace?.members?.some(
-      member => member.user.id === user.id && member.role === "ADMIN"
+      member => member?.user?.id === user.id && member.role === "ADMIN"
     );
     const isProjectLead = project?.team_lead === user.id;
-    const isTaskAssignee = task.assignees?.some(assignee => assignee.user.id === user.id);
+    const isTaskAssignee = task.assignees?.some(assignee => assignee?.user?.id === user.id);
     
     return isWorkspaceAdmin || isProjectLead || isTaskAssignee;
   };
@@ -99,7 +99,16 @@ const TaskDetails = () => {
 
       if (data.task) {
         console.log("Task with links:", data.task);
-        setTask(data.task);
+        
+        // Ensure assignees array exists and has proper structure
+        const safeTask = {
+          ...data.task,
+          assignees: Array.isArray(data.task.assignees) 
+            ? data.task.assignees.filter(assignee => assignee?.user != null)
+            : []
+        };
+        
+        setTask(safeTask);
         
         if (data.task.project) {
           setProject(data.task.project);
@@ -117,12 +126,15 @@ const TaskDetails = () => {
           due_date: data.task.due_date
         });
         
+        // Safely set available members
         if (data.task.project?.members) {
-          setAvailableMembers(data.task.project.members);
+          const safeMembers = data.task.project.members.filter(member => member?.user != null);
+          setAvailableMembers(safeMembers);
         } else {
           const proj = currentWorkspace?.projects?.find((p) => p.id === projectId);
           if (proj?.members) {
-            setAvailableMembers(proj.members);
+            const safeMembers = proj.members.filter(member => member?.user != null);
+            setAvailableMembers(safeMembers);
           }
         }
       } else {
@@ -139,7 +151,15 @@ const TaskDetails = () => {
           return;
         }
 
-        setTask(tsk);
+        // Ensure assignees array exists
+        const safeTask = {
+          ...tsk,
+          assignees: Array.isArray(tsk.assignees) 
+            ? tsk.assignees.filter(assignee => assignee?.user != null)
+            : []
+        };
+
+        setTask(safeTask);
         setProject(proj);
         setEditingTaskData({
           title: tsk.title,
@@ -151,7 +171,8 @@ const TaskDetails = () => {
         });
         
         if (proj.members) {
-          setAvailableMembers(proj.members);
+          const safeMembers = proj.members.filter(member => member?.user != null);
+          setAvailableMembers(safeMembers);
         }
       }
     } catch (error) {
@@ -170,7 +191,15 @@ const TaskDetails = () => {
         return;
       }
 
-      setTask(tsk);
+      // Ensure assignees array exists
+      const safeTask = {
+        ...tsk,
+        assignees: Array.isArray(tsk.assignees) 
+          ? tsk.assignees.filter(assignee => assignee?.user != null)
+          : []
+      };
+
+      setTask(safeTask);
       setProject(proj);
       setEditingTaskData({
         title: tsk.title,
@@ -182,7 +211,8 @@ const TaskDetails = () => {
       });
       
       if (proj.members) {
-        setAvailableMembers(proj.members);
+        const safeMembers = proj.members.filter(member => member?.user != null);
+        setAvailableMembers(safeMembers);
       }
     } finally {
       setLoading(false);
@@ -205,7 +235,15 @@ const TaskDetails = () => {
 
       console.log("Task update response:", data);
 
-      setTask(data.task);
+      // Ensure assignees array exists in the updated task
+      const safeTask = {
+        ...data.task,
+        assignees: Array.isArray(data.task.assignees) 
+          ? data.task.assignees.filter(assignee => assignee?.user != null)
+          : []
+      };
+
+      setTask(safeTask);
       setIsEditingTask(false);
       toast.success("Task updated successfully!");
       
@@ -223,7 +261,11 @@ const TaskDetails = () => {
     try {
       const token = await getToken();
       
-      const currentAssignees = task.assignees?.map(assignee => assignee.user.id) || [];
+      // Safely get current assignee IDs
+      const currentAssignees = (task.assignees || [])
+        .map(assignee => assignee?.user?.id)
+        .filter(id => id != null);
+      
       const updatedAssignees = [...currentAssignees, memberId];
       
       const { data } = await api.put(
@@ -235,7 +277,15 @@ const TaskDetails = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setTask(data.task);
+      // Ensure assignees array exists in the updated task
+      const safeTask = {
+        ...data.task,
+        assignees: Array.isArray(data.task.assignees) 
+          ? data.task.assignees.filter(assignee => assignee?.user != null)
+          : []
+      };
+
+      setTask(safeTask);
       setSelectedMember("");
       setIsManagingAssignees(false);
       toast.success("Assignee added successfully!");
@@ -252,7 +302,11 @@ const TaskDetails = () => {
     try {
       const token = await getToken();
       
-      const currentAssignees = task.assignees?.map(assignee => assignee.user.id) || [];
+      // Safely get current assignee IDs
+      const currentAssignees = (task.assignees || [])
+        .map(assignee => assignee?.user?.id)
+        .filter(id => id != null);
+      
       const updatedAssignees = currentAssignees.filter(id => id !== memberId);
       
       const { data } = await api.put(
@@ -264,7 +318,15 @@ const TaskDetails = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setTask(data.task);
+      // Ensure assignees array exists in the updated task
+      const safeTask = {
+        ...data.task,
+        assignees: Array.isArray(data.task.assignees) 
+          ? data.task.assignees.filter(assignee => assignee?.user != null)
+          : []
+      };
+
+      setTask(safeTask);
       toast.success("Assignee removed successfully!");
       
       dispatch(fetchWorkspaces({ getToken }));
@@ -433,8 +495,18 @@ const TaskDetails = () => {
   useEffect(() => {
     if (task) {
       console.log("Current task data:", task);
+      console.log("Task assignees:", task.assignees);
       console.log("Task links:", task.links);
       console.log("Task description:", task.description);
+      
+      // Debug: Check for problematic assignees
+      if (task.assignees) {
+        task.assignees.forEach((assignee, index) => {
+          if (!assignee?.user?.id) {
+            console.warn(`Problematic assignee at index ${index}:`, assignee);
+          }
+        });
+      }
     }
   }, [task]);
 

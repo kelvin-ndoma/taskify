@@ -18,15 +18,24 @@ const AssigneesManager = ({
   onRemoveAssignee,
   onTaskDataChange
 }) => {
-  // Get available members for assignment (not already assigned)
+  // Safely get available members for assignment
   const getAvailableMembers = () => {
-    if (!availableMembers || !task.assignees) return availableMembers || [];
+    if (!availableMembers || !Array.isArray(availableMembers)) return [];
     
-    const assignedUserIds = task.assignees.map(assignee => assignee.user.id);
+    // Safely get assigned user IDs
+    const assignedUserIds = (task.assignees || [])
+      .map(assignee => assignee?.user?.id)
+      .filter(id => id != null); // Remove null/undefined
+    
     return availableMembers.filter(member => 
-      !assignedUserIds.includes(member.user.id)
+      member?.user?.id && !assignedUserIds.includes(member.user.id)
     );
   };
+
+  // Safely get assignees with fallbacks
+  const safeAssignees = (task.assignees || []).filter(assignee => 
+    assignee?.user?.id != null
+  );
 
   return (
     <div className="space-y-3 text-sm text-gray-700 dark:text-zinc-300">
@@ -60,7 +69,7 @@ const AssigneesManager = ({
               <option value="">Select team member...</option>
               {getAvailableMembers().map((member) => (
                 <option key={member.user.id} value={member.user.id}>
-                  {member.user.name} ({member.user.email})
+                  {member.user.name || member.user.email} ({member.user.email})
                 </option>
               ))}
             </select>
@@ -81,15 +90,15 @@ const AssigneesManager = ({
       )}
 
       {/* Assignees List */}
-      {task.assignees && task.assignees.length > 0 ? (
+      {safeAssignees.length > 0 ? (
         <div className="flex flex-wrap gap-2">
-          {task.assignees.map((assignee) => (
+          {safeAssignees.map((assignee) => (
             <div 
-              key={assignee.user?.id} 
+              key={assignee.user.id} 
               className="flex items-center gap-2 bg-gray-100 dark:bg-zinc-800 px-3 py-1 rounded-full group relative"
             >
               <UserAvatar user={assignee.user} size={4} />
-              <span className="text-xs">{assignee.user?.name || "Unassigned"}</span>
+              <span className="text-xs">{assignee.user.name || assignee.user.email || "Unassigned"}</span>
               
               {/* Remove Assignee Button */}
               {canEditTask && (
