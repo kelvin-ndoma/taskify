@@ -66,7 +66,7 @@ export const addComment = async (req, res) => {
       });
     }
 
-    // Create comment with transaction - FIXED VERSION
+    // Create comment with transaction - COMPLETELY FIXED VERSION
     const result = await prisma.$transaction(async (tx) => {
       try {
         // Create comment
@@ -76,20 +76,9 @@ export const addComment = async (req, res) => {
             content: content.trim(), 
             userId,
           },
-          include: { 
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true
-              }
-            } 
-          },
         });
 
         // Create comment links if provided
-        let createdLinks = [];
         if (links && links.length > 0) {
           // Create links
           await tx.commentLink.createMany({
@@ -99,27 +88,35 @@ export const addComment = async (req, res) => {
               userId: userId,
             })),
           });
+        }
 
-          // Fetch the created links with user data
-          createdLinks = await tx.commentLink.findMany({
-            where: { commentId: comment.id },
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  image: true,
+        // Return the complete comment with user and links
+        const completeComment = await tx.comment.findUnique({
+          where: { id: comment.id },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            },
+            links: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true,
+                  },
                 },
               },
             },
-          });
-        }
+          },
+        });
 
-        // Return the complete comment with links
-        return {
-          ...comment,
-          links: createdLinks
-        };
+        return completeComment;
       } catch (transactionError) {
         console.error("Transaction error:", transactionError);
         throw new Error("Failed to create comment with links");
@@ -127,6 +124,7 @@ export const addComment = async (req, res) => {
     });
 
     console.log(`✅ Comment created: ${result.id} for task: ${taskId} with ${result.links?.length || 0} links`);
+    console.log(`🔗 Links in response:`, result.links);
 
     // Trigger email event for new comment
     try {
@@ -235,7 +233,7 @@ export const updateComment = async (req, res) => {
       });
     }
 
-    // Update comment with transaction - FIXED VERSION
+    // Update comment with transaction
     const updatedComment = await prisma.$transaction(async (tx) => {
       try {
         // Update comment
@@ -246,8 +244,6 @@ export const updateComment = async (req, res) => {
           },
         });
 
-        let updatedLinks = [];
-        
         // Update comment links if provided
         if (links !== undefined) {
           // Delete all existing links for this comment
@@ -264,28 +260,11 @@ export const updateComment = async (req, res) => {
                 userId: userId,
               })),
             });
-
-            // Fetch the updated links
-            updatedLinks = await tx.commentLink.findMany({
-              where: { commentId: commentId },
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    image: true,
-                  },
-                },
-              },
-            });
           }
-        } else {
-          // Keep existing links if links not provided in update
-          updatedLinks = comment.links;
         }
 
         // Return updated comment with full details
-        const finalComment = await tx.comment.findUnique({
+        return await tx.comment.findUnique({
           where: { id: commentId },
           include: {
             user: {
@@ -309,11 +288,6 @@ export const updateComment = async (req, res) => {
             },
           },
         });
-
-        return {
-          ...finalComment,
-          links: updatedLinks
-        };
       } catch (transactionError) {
         console.error("Transaction error:", transactionError);
         throw new Error("Failed to update comment with links");

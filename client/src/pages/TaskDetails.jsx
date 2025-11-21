@@ -331,65 +331,65 @@ const TaskDetails = () => {
     }
   };
 
-  // Comment handlers - FIXED VERSION
-  const handleAddComment = async () => {
-    if (!newComment.trim() && commentLinks.length === 0) {
-      toast.error("Comment cannot be empty");
-      return;
-    }
+ const handleAddComment = async () => {
+  if (!newComment.trim() && commentLinks.length === 0) {
+    toast.error("Comment cannot be empty");
+    return;
+  }
 
-    try {
-      setCommentLoading(true);
-      toast.loading("Adding comment...");
-      const token = await getToken();
+  try {
+    setCommentLoading(true);
+    toast.loading("Adding comment...");
+    const token = await getToken();
 
-      const linksData = commentLinks.map(link => ({
-        url: link.url
-      }));
+    const linksData = commentLinks.map(link => ({
+      url: link.url
+    }));
 
-      console.log("Sending comment data:", {
-        taskId: task.id,
+    console.log("📤 Sending comment data:", {
+      taskId: task.id,
+      content: newComment,
+      links: linksData
+    });
+
+    const { data } = await api.post(
+      `/api/comments`,
+      { 
+        taskId: task.id, 
         content: newComment,
         links: linksData
-      });
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
 
-      const { data } = await api.post(
-        `/api/comments`,
-        { 
-          taskId: task.id, 
-          content: newComment,
-          links: linksData
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    console.log("📥 Comment creation response:", data);
+    console.log("🔗 Links in response:", data.comment?.links);
 
-      console.log("Comment creation response:", data);
-
-      // Ensure the response has the expected structure
-      if (data.comment) {
-        // Add the new comment to the beginning of the list
-        setComments((prev) => [data.comment, ...prev]);
-        
-        // Clear the form
-        setNewComment("");
-        setCommentLinks([]);
-        setCommentLinkUrl("");
-        setShowCommentLinkInput(false);
-        
-        toast.dismissAll();
-        toast.success("Comment added successfully!");
-      } else {
-        throw new Error("Invalid response format");
-      }
-    } catch (error) {
+    // Ensure the response has the expected structure
+    if (data.comment) {
+      // Add the new comment to the beginning of the list
+      setComments((prev) => [data.comment, ...prev]);
+      
+      // Clear the form
+      setNewComment("");
+      setCommentLinks([]);
+      setCommentLinkUrl("");
+      setShowCommentLinkInput(false);
+      
       toast.dismissAll();
-      console.error("Add comment error:", error);
-      console.error("Error response:", error.response);
-      toast.error(error?.response?.data?.message || error.message || "Failed to add comment");
-    } finally {
-      setCommentLoading(false);
+      toast.success("Comment added successfully!");
+    } else {
+      throw new Error("Invalid response format");
     }
-  };
+  } catch (error) {
+    toast.dismissAll();
+    console.error("❌ Add comment error:", error);
+    console.error("❌ Error response:", error.response);
+    toast.error(error?.response?.data?.message || error.message || "Failed to add comment");
+  } finally {
+    setCommentLoading(false);
+  }
+};
 
   const addCommentLink = () => {
     if (!commentLinkUrl.trim()) {
