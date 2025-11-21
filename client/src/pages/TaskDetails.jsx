@@ -8,8 +8,8 @@ import { ExternalLinkIcon } from "lucide-react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import api from "../configs/api";
 import { fetchWorkspaces } from "../features/workspaceSlice";
-import CommentsSection from "./components/CommentsSection";
-import TaskInfoPanel from "./components/TaskInfoPanel";
+import CommentsSection from "../components/CommentsSection";
+import TaskInfoPanel from "../components/";
 
 const TaskDetails = () => {
   const [searchParams] = useSearchParams();
