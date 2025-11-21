@@ -1,6 +1,6 @@
 // components/CommentForm.js
 import React from 'react';
-import { PlusIcon, PaperclipIcon, LinkIcon, X } from "lucide-react"; // ✅ Use X, not XIcon
+import { PlusIcon, PaperclipIcon, LinkIcon, X } from "lucide-react";
 
 const CommentForm = ({
   newComment,
@@ -74,7 +74,7 @@ const CommentForm = ({
                       onClick={() => onRemoveCommentLink(link.id)}
                       className="text-red-500 hover:text-red-700"
                     >
-                      <X className="size-3" /> {/* ✅ FIXED: Use X instead of XIcon */}
+                      <X className="size-3" />
                     </button>
                   </div>
                 ))}

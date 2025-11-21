@@ -4,7 +4,6 @@ import { format } from "date-fns";
 import { Edit3, Trash2, Save, X } from "lucide-react";
 import UserAvatar from './UserAvatar';
 import CommentLink from './CommentLink';
-import { renderContentWithLinks } from '../utils/helpers';
 
 const CommentItem = ({ 
   comment, 
@@ -18,6 +17,33 @@ const CommentItem = ({
   onContentChange 
 }) => {
   const canEditComment = comment.user.id === user?.id;
+
+  const renderContentWithLinks = (content) => {
+    if (!content) return null;
+
+    const urlRegex = /(https?:\/\/[^\s<>{}\[\]\\^`|()]+[^\s<>{}\[\]\\^`|.,!?;)]\)?)/gi;
+    
+    const parts = content.split(urlRegex);
+    const matches = content.match(urlRegex) || [];
+
+    return parts.map((part, index) => {
+      if (matches.includes(part)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+          >
+            {part}
+            <ExternalLinkIcon className="size-3" />
+          </a>
+        );
+      }
+      return part;
+    });
+  };
 
   return (
     <div
