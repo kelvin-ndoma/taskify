@@ -1,60 +1,36 @@
 // components/CommentForm.jsx
-import { useState } from "react";
 import { PaperclipIcon, PlusIcon, LinkIcon, XIcon } from "lucide-react";
 import toast from "react-hot-toast";
 
 const CommentForm = ({ 
-  onSubmit, 
-  loading, 
-  taskId 
+  newComment,
+  onCommentChange,
+  onKeyPress,
+  onAddComment,
+  commentLinks,
+  showCommentLinkInput,
+  commentLinkUrl,
+  onAddLinkClick,
+  onLinkUrlChange,
+  onAddCommentLink,
+  onRemoveCommentLink,
+  commentLoading
 }) => {
-  const [newComment, setNewComment] = useState("");
-  const [commentLinks, setCommentLinks] = useState([]);
-  const [showCommentLinkInput, setShowCommentLinkInput] = useState(false);
-  const [commentLinkUrl, setCommentLinkUrl] = useState("");
-
-  const addCommentLink = () => {
-    if (!commentLinkUrl.trim()) {
-      toast.error("Please enter a valid URL");
+  const handleSubmit = () => {
+    if (typeof onAddComment !== 'function') {
+      console.error('onAddComment is not a function:', onAddComment);
+      toast.error('Cannot submit comment - form error');
       return;
     }
-
-    let formattedUrl = commentLinkUrl.trim();
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-      formattedUrl = 'https://' + formattedUrl;
-    }
-
-    try {
-      new URL(formattedUrl);
-      
-      const newLink = {
-        url: formattedUrl,
-        id: Date.now().toString()
-      };
-
-      setCommentLinks(prev => [...prev, newLink]);
-      setCommentLinkUrl("");
-      setShowCommentLinkInput(false);
-      toast.success("Link added to comment!");
-    } catch (error) {
-      toast.error("Please enter a valid URL");
-    }
+    onAddComment();
   };
 
-  const removeCommentLink = (linkId) => {
-    setCommentLinks(prev => prev.filter(link => link.id !== linkId));
-  };
-
-  const handleSubmit = () => {
-    onSubmit(newComment, commentLinks);
-    setNewComment("");
-    setCommentLinks([]);
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      handleSubmit();
+  const handleKeyDown = (e) => {
+    if (typeof onKeyPress !== 'function') {
+      console.error('onKeyPress is not a function:', onKeyPress);
+      return;
     }
+    onKeyPress(e);
   };
 
   return (
@@ -68,7 +44,7 @@ const CommentForm = ({
             </label>
             <button
               type="button"
-              onClick={() => setShowCommentLinkInput(!showCommentLinkInput)}
+              onClick={onAddLinkClick}
               className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
             >
               <PlusIcon className="size-3" />
@@ -81,14 +57,14 @@ const CommentForm = ({
               <input
                 type="url"
                 value={commentLinkUrl}
-                onChange={(e) => setCommentLinkUrl(e.target.value)}
+                onChange={onLinkUrlChange}
                 placeholder="https://example.com"
                 className="flex-1 rounded dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCommentLink())}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), onAddCommentLink())}
               />
               <button
                 type="button"
-                onClick={addCommentLink}
+                onClick={onAddCommentLink}
                 className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm flex items-center gap-1"
               >
                 <PlusIcon className="size-3" />
@@ -109,7 +85,7 @@ const CommentForm = ({
                     <span className="truncate flex-1">{link.url}</span>
                     <button
                       type="button"
-                      onClick={() => removeCommentLink(link.id)}
+                      onClick={() => onRemoveCommentLink(link.id)}
                       className="text-red-500 hover:text-red-700"
                     >
                       <XIcon className="size-3" />
@@ -123,12 +99,12 @@ const CommentForm = ({
 
         <textarea
           value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          onKeyDown={handleKeyPress}
+          onChange={onCommentChange}
+          onKeyDown={handleKeyDown}
           placeholder="Write a comment... (Ctrl+Enter to send)"
           className="w-full dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md p-3 text-sm text-gray-900 dark:text-zinc-200 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           rows={3}
-          disabled={loading}
+          disabled={commentLoading}
         />
         <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
           Press Ctrl+Enter to send
@@ -136,10 +112,10 @@ const CommentForm = ({
       </div>
       <button
         onClick={handleSubmit}
-        disabled={(!newComment.trim() && commentLinks.length === 0) || loading}
+        disabled={(!newComment.trim() && commentLinks.length === 0) || commentLoading}
         className="bg-gradient-to-l from-blue-500 to-blue-600 transition-colors text-white text-sm px-6 py-3 rounded disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? "Posting..." : "Post"}
+        {commentLoading ? "Posting..." : "Post"}
       </button>
     </div>
   );

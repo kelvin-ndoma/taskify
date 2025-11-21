@@ -219,7 +219,7 @@ const TaskDetails = () => {
     }
   };
 
-  // Task handlers - REMOVED fetchWorkspaces dispatches
+  // Task handlers
   const handleUpdateTask = async () => {
     try {
       setTaskLoading(true);
@@ -246,8 +246,6 @@ const TaskDetails = () => {
       setTask(safeTask);
       setIsEditingTask(false);
       toast.success("Task updated successfully!");
-      
-      // REMOVED: dispatch(fetchWorkspaces({ getToken }));
       
     } catch (error) {
       console.error("Update task error:", error);
@@ -290,8 +288,6 @@ const TaskDetails = () => {
       setIsManagingAssignees(false);
       toast.success("Assignee added successfully!");
       
-      // REMOVED: dispatch(fetchWorkspaces({ getToken }));
-      
     } catch (error) {
       console.error("Add assignee error:", error);
       toast.error(error?.response?.data?.message || "Failed to add assignee");
@@ -329,15 +325,13 @@ const TaskDetails = () => {
       setTask(safeTask);
       toast.success("Assignee removed successfully!");
       
-      // REMOVED: dispatch(fetchWorkspaces({ getToken }));
-      
     } catch (error) {
       console.error("Remove assignee error:", error);
       toast.error(error?.response?.data?.message || "Failed to remove assignee");
     }
   };
 
-  // Comment handlers
+  // Comment handlers - FIXED VERSION
   const handleAddComment = async () => {
     if (!newComment.trim() && commentLinks.length === 0) {
       toast.error("Comment cannot be empty");
@@ -353,6 +347,12 @@ const TaskDetails = () => {
         url: link.url
       }));
 
+      console.log("Sending comment data:", {
+        taskId: task.id,
+        content: newComment,
+        links: linksData
+      });
+
       const { data } = await api.post(
         `/api/comments`,
         { 
@@ -363,16 +363,24 @@ const TaskDetails = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setComments((prev) => [...prev, data.comment]);
-      setNewComment("");
-      setCommentLinks([]);
-      setCommentLinkUrl("");
-      setShowCommentLinkInput(false);
-      toast.dismissAll();
-      toast.success("Comment added.");
+      console.log("Comment creation response:", data);
+
+      // Ensure the response has the expected structure
+      if (data.comment) {
+        setComments((prev) => [...prev, data.comment]);
+        setNewComment("");
+        setCommentLinks([]);
+        setCommentLinkUrl("");
+        setShowCommentLinkInput(false);
+        toast.dismissAll();
+        toast.success("Comment added.");
+      } else {
+        throw new Error("Invalid response format");
+      }
     } catch (error) {
       toast.dismissAll();
       console.error("Add comment error:", error);
+      console.error("Error response:", error.response);
       toast.error(error?.response?.data?.message || error.message || "Failed to add comment");
     } finally {
       setCommentLoading(false);
@@ -478,6 +486,22 @@ const TaskDetails = () => {
     }
   };
 
+  const handleCommentChange = (e) => {
+    setNewComment(e.target.value);
+  };
+
+  const handleEditingCommentContentChange = (content) => {
+    setEditingCommentContent(content);
+  };
+
+  const handleAddLinkClick = () => {
+    setShowCommentLinkInput(!showCommentLinkInput);
+  };
+
+  const handleLinkUrlChange = (e) => {
+    setCommentLinkUrl(e.target.value);
+  };
+
   // useEffect hooks
   useEffect(() => {
     fetchTaskDetails();
@@ -525,16 +549,16 @@ const TaskDetails = () => {
         commentLoading={commentLoading}
         editingCommentId={editingCommentId}
         editingCommentContent={editingCommentContent}
-        onCommentChange={(e) => setNewComment(e.target.value)}
+        onCommentChange={handleCommentChange}
         onKeyPress={handleKeyPress}
         onAddComment={handleAddComment}
         onStartEditComment={startEditComment}
         onCancelEditComment={cancelEditComment}
         onUpdateComment={handleUpdateComment}
         onDeleteComment={handleDeleteComment}
-        onEditingCommentContentChange={setEditingCommentContent}
-        onAddLinkClick={() => setShowCommentLinkInput(!showCommentLinkInput)}
-        onLinkUrlChange={(e) => setCommentLinkUrl(e.target.value)}
+        onEditingCommentContentChange={handleEditingCommentContentChange}
+        onAddLinkClick={handleAddLinkClick}
+        onLinkUrlChange={handleLinkUrlChange}
         onAddCommentLink={addCommentLink}
         onRemoveCommentLink={removeCommentLink}
       />

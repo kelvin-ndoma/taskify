@@ -2,7 +2,7 @@
 import React from 'react';
 import { MessageCircle } from "lucide-react";
 import CommentItem from './CommentItem';
-import CommentForm from '../components/CommentForm';
+import CommentForm from './CommentForm';
 
 const CommentsSection = ({
   comments,
@@ -63,17 +63,17 @@ const CommentsSection = ({
 
         <CommentForm
           newComment={newComment}
-          commentLinks={commentLinks}
-          showCommentLinkInput={showCommentLinkInput}
-          commentLinkUrl={commentLinkUrl}
-          commentLoading={commentLoading}
           onCommentChange={onCommentChange}
           onKeyPress={onKeyPress}
           onAddComment={onAddComment}
+          commentLinks={commentLinks}
+          showCommentLinkInput={showCommentLinkInput}
+          commentLinkUrl={commentLinkUrl}
           onAddLinkClick={onAddLinkClick}
           onLinkUrlChange={onLinkUrlChange}
           onAddCommentLink={onAddCommentLink}
           onRemoveCommentLink={onRemoveCommentLink}
+          commentLoading={commentLoading}
         />
       </div>
     </div>

@@ -1,7 +1,7 @@
 // components/CommentItem.js
 import React from 'react';
 import { format } from "date-fns";
-import { Edit3, Trash2, Save, X } from "lucide-react";
+import { Edit3, Trash2, Save, X, ExternalLinkIcon } from "lucide-react";
 import UserAvatar from './UserAvatar';
 import CommentLink from './CommentLink';
 
@@ -17,6 +17,9 @@ const CommentItem = ({
   onContentChange 
 }) => {
   const canEditComment = comment.user.id === user?.id;
+
+  // Safe link access
+  const commentLinks = comment.links || [];
 
   const renderContentWithLinks = (content) => {
     if (!content) return null;
@@ -117,10 +120,10 @@ const CommentItem = ({
         </div>
       )}
 
-      {/* Comment Links */}
-      {comment.links && comment.links.length > 0 && (
+      {/* Comment Links - FIXED: Safe rendering */}
+      {commentLinks.length > 0 && (
         <div className="mt-3 space-y-2">
-          {comment.links.map((link) => (
+          {commentLinks.map((link) => (
             <CommentLink key={link.id} link={link} />
           ))}
         </div>
