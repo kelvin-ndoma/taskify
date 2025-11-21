@@ -27,16 +27,27 @@ const CommentsSection = ({
   onAddCommentLink,
   onRemoveCommentLink
 }) => {
+  
+  // Debug: Log comments to see if links are present
+  React.useEffect(() => {
+    console.log("Comments in CommentsSection:", comments);
+    comments.forEach((comment, index) => {
+      console.log(`Comment ${index}:`, comment);
+      console.log(`Comment ${index} links:`, comment.links);
+    });
+  }, [comments]);
+
   return (
     <div className="w-full lg:w-2/3">
       <div className="p-5 rounded-md border border-gray-300 dark:border-zinc-800 flex flex-col lg:h-[80vh]">
         <h2 className="text-base font-semibold flex items-center gap-2 mb-4 text-gray-900 dark:text-white">
-          <MessageCircle className="size-5" /> Task Discussion ({comments.length})
+          <MessageCircle className="size-5" /> 
+          Task Discussion ({comments.length})
         </h2>
 
-        <div className="flex-1 md:overflow-y-scroll no-scrollbar">
+        <div className="flex-1 md:overflow-y-scroll no-scrollbar pr-2">
           {comments.length > 0 ? (
-            <div className="flex flex-col gap-4 mb-6 mr-2">
+            <div className="flex flex-col gap-4 mb-6">
               {comments.map((comment) => (
                 <CommentItem
                   key={comment.id}

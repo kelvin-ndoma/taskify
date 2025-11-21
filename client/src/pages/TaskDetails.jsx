@@ -367,13 +367,17 @@ const TaskDetails = () => {
 
       // Ensure the response has the expected structure
       if (data.comment) {
-        setComments((prev) => [...prev, data.comment]);
+        // Add the new comment to the beginning of the list
+        setComments((prev) => [data.comment, ...prev]);
+        
+        // Clear the form
         setNewComment("");
         setCommentLinks([]);
         setCommentLinkUrl("");
         setShowCommentLinkInput(false);
+        
         toast.dismissAll();
-        toast.success("Comment added.");
+        toast.success("Comment added successfully!");
       } else {
         throw new Error("Invalid response format");
       }
@@ -501,6 +505,21 @@ const TaskDetails = () => {
   const handleLinkUrlChange = (e) => {
     setCommentLinkUrl(e.target.value);
   };
+
+  // Debug useEffect to check comment data
+  useEffect(() => {
+    console.log("=== COMMENT DATA DEBUG ===");
+    console.log("All comments:", comments);
+    comments.forEach((comment, index) => {
+      console.log(`Comment ${index}:`, {
+        id: comment.id,
+        content: comment.content,
+        linksCount: comment.links?.length || 0,
+        links: comment.links
+      });
+    });
+    console.log("=== END DEBUG ===");
+  }, [comments]);
 
   // useEffect hooks
   useEffect(() => {
