@@ -2,7 +2,7 @@
 import React from 'react';
 import { MessageCircle } from "lucide-react";
 import CommentItem from './CommentItem';
-import CommentForm from './CommentForm';
+import CommentForm from '../components/CommentForm';
 
 const CommentsSection = ({
   comments,

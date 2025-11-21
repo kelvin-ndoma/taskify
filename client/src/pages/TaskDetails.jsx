@@ -9,7 +9,7 @@ import { useAuth, useUser } from "@clerk/clerk-react";
 import api from "../configs/api";
 import { fetchWorkspaces } from "../features/workspaceSlice";
 import CommentsSection from "../components/CommentsSection";
-import TaskInfoPanel from "../components/";
+import TaskInfoPanel from "../components/TaskInfoPanel";
 
 const TaskDetails = () => {
   const [searchParams] = useSearchParams();
