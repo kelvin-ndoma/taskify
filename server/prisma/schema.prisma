@@ -143,7 +143,7 @@ model CommentLink {
   comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([url, commentId])
+  // REMOVED: @@unique([url, commentId]) - This was preventing multiple links per comment
 }
 
 enum WorkspaceRole {

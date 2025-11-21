@@ -8,6 +8,13 @@ export const addComment = async (req, res) => {
     const origin = req.get("origin");
     const { content, taskId, links = [] } = req.body;
 
+    console.log("📥 Received comment request:", { 
+      userId, 
+      taskId, 
+      contentLength: content?.length,
+      linksCount: links?.length 
+    });
+
     // Validate input
     if (!taskId || !content) {
       return res.status(400).json({ 
@@ -66,10 +73,12 @@ export const addComment = async (req, res) => {
       });
     }
 
-    // Create comment with transaction - COMPLETELY FIXED VERSION
+    console.log("🔄 Starting transaction to create comment with links...");
+
+    // Create comment with transaction - SIMPLIFIED AND FIXED
     const result = await prisma.$transaction(async (tx) => {
       try {
-        // Create comment
+        // Step 1: Create the comment first
         const comment = await tx.comment.create({
           data: { 
             taskId, 
@@ -78,19 +87,27 @@ export const addComment = async (req, res) => {
           },
         });
 
-        // Create comment links if provided
+        console.log(`✅ Comment created: ${comment.id}`);
+
+        // Step 2: Create comment links if provided
         if (links && links.length > 0) {
-          // Create links
-          await tx.commentLink.createMany({
-            data: links.map((link) => ({
-              url: link.url,
-              commentId: comment.id,
-              userId: userId,
-            })),
-          });
+          console.log(`🔄 Creating ${links.length} comment links...`);
+          
+          const linkPromises = links.map((link) => 
+            tx.commentLink.create({
+              data: {
+                url: link.url,
+                commentId: comment.id,
+                userId: userId,
+              },
+            })
+          );
+
+          await Promise.all(linkPromises);
+          console.log(`✅ Created ${links.length} comment links`);
         }
 
-        // Return the complete comment with user and links
+        // Step 3: Fetch the complete comment with all relationships
         const completeComment = await tx.comment.findUnique({
           where: { id: comment.id },
           include: {
@@ -112,19 +129,28 @@ export const addComment = async (req, res) => {
                   },
                 },
               },
+              orderBy: {
+                createdAt: 'asc'
+              }
             },
           },
         });
 
+        console.log(`📊 Complete comment fetched:`, {
+          id: completeComment.id,
+          linksCount: completeComment.links?.length,
+          links: completeComment.links
+        });
+
         return completeComment;
+
       } catch (transactionError) {
-        console.error("Transaction error:", transactionError);
-        throw new Error("Failed to create comment with links");
+        console.error("❌ Transaction error:", transactionError);
+        throw new Error(`Failed to create comment with links: ${transactionError.message}`);
       }
     });
 
-    console.log(`✅ Comment created: ${result.id} for task: ${taskId} with ${result.links?.length || 0} links`);
-    console.log(`🔗 Links in response:`, result.links);
+    console.log(`🎉 Final result: Comment ${result.id} with ${result.links?.length || 0} links`);
 
     // Trigger email event for new comment
     try {
@@ -147,9 +173,13 @@ export const addComment = async (req, res) => {
       comment: result, 
       message: "Comment added successfully." 
     });
+
   } catch (error) {
-    console.error("Add comment error:", error);
-    res.status(500).json({ message: error.message || "Internal server error" });
+    console.error("💥 Add comment error:", error);
+    res.status(500).json({ 
+      message: error.message || "Internal server error",
+      code: error.code
+    });
   }
 };
 
@@ -159,6 +189,13 @@ export const updateComment = async (req, res) => {
     const { userId } = await req.auth();
     const { commentId } = req.params;
     const { content, links } = req.body;
+
+    console.log("📥 Received comment update request:", { 
+      userId, 
+      commentId,
+      contentLength: content?.length,
+      linksCount: links?.length 
+    });
 
     if (!commentId || !content) {
       return res.status(400).json({ 
@@ -233,10 +270,12 @@ export const updateComment = async (req, res) => {
       });
     }
 
+    console.log("🔄 Starting transaction to update comment...");
+
     // Update comment with transaction
     const updatedComment = await prisma.$transaction(async (tx) => {
       try {
-        // Update comment
+        // Update comment content
         await tx.comment.update({
           where: { id: commentId },
           data: { 
@@ -244,27 +283,37 @@ export const updateComment = async (req, res) => {
           },
         });
 
-        // Update comment links if provided
+        console.log(`✅ Comment content updated: ${commentId}`);
+
+        // Handle links update
         if (links !== undefined) {
+          console.log(`🔄 Updating comment links...`);
+          
           // Delete all existing links for this comment
           await tx.commentLink.deleteMany({
             where: { commentId: commentId }
           });
+          console.log(`✅ Deleted existing links for comment ${commentId}`);
 
-          // Create new links
+          // Create new links if provided
           if (links.length > 0) {
-            await tx.commentLink.createMany({
-              data: links.map((link) => ({
-                url: link.url,
-                commentId: commentId,
-                userId: userId,
-              })),
-            });
+            const linkPromises = links.map((link) =>
+              tx.commentLink.create({
+                data: {
+                  url: link.url,
+                  commentId: commentId,
+                  userId: userId,
+                },
+              })
+            );
+
+            await Promise.all(linkPromises);
+            console.log(`✅ Created ${links.length} new links for comment ${commentId}`);
           }
         }
 
-        // Return updated comment with full details
-        return await tx.comment.findUnique({
+        // Fetch the complete updated comment
+        const completeComment = await tx.comment.findUnique({
           where: { id: commentId },
           include: {
             user: {
@@ -285,24 +334,38 @@ export const updateComment = async (req, res) => {
                   },
                 },
               },
+              orderBy: {
+                createdAt: 'asc'
+              }
             },
           },
         });
+
+        console.log(`📊 Updated comment fetched:`, {
+          id: completeComment.id,
+          linksCount: completeComment.links?.length
+        });
+
+        return completeComment;
+
       } catch (transactionError) {
-        console.error("Transaction error:", transactionError);
-        throw new Error("Failed to update comment with links");
+        console.error("❌ Transaction error:", transactionError);
+        throw new Error(`Failed to update comment with links: ${transactionError.message}`);
       }
     });
 
-    console.log(`✅ Comment updated: ${commentId} with ${updatedComment.links?.length || 0} links`);
+    console.log(`🎉 Comment updated: ${commentId} with ${updatedComment.links?.length || 0} links`);
 
     res.json({ 
       comment: updatedComment, 
       message: "Comment updated successfully." 
     });
   } catch (error) {
-    console.error("Update comment error:", error);
-    res.status(500).json({ message: error.message || "Internal server error" });
+    console.error("💥 Update comment error:", error);
+    res.status(500).json({ 
+      message: error.message || "Internal server error",
+      code: error.code
+    });
   }
 };
 
@@ -311,6 +374,8 @@ export const getTaskComments = async (req, res) => {
   try {
     const { userId } = await req.auth();
     const { taskId } = req.params;
+
+    console.log("📥 Fetching comments for task:", taskId);
 
     if (!taskId) {
       return res.status(400).json({ message: "Task ID is required." });
@@ -368,14 +433,22 @@ export const getTaskComments = async (req, res) => {
               },
             },
           },
+          orderBy: {
+            createdAt: 'asc'
+          }
         },
       },
       orderBy: { createdAt: "desc" },
     });
 
+    console.log(`📊 Found ${comments.length} comments for task ${taskId}`);
+    comments.forEach(comment => {
+      console.log(`   - Comment ${comment.id}: ${comment.links?.length || 0} links`);
+    });
+
     res.json({ comments });
   } catch (error) {
-    console.error("Get comments error:", error);
+    console.error("💥 Get comments error:", error);
     res.status(500).json({ message: error.message || "Internal server error" });
   }
 };
