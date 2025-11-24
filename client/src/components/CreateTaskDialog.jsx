@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar as CalendarIcon, XIcon, Users, LinkIcon, PlusIcon, PaperclipIcon, FolderIcon } from "lucide-react";
+import { Calendar as CalendarIcon, XIcon, Users, LinkIcon, PlusIcon, PaperclipIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { format } from "date-fns";
 import { useAuth } from "@clerk/clerk-react";
@@ -7,7 +7,7 @@ import api from "../configs/api";
 import toast from "react-hot-toast";
 import { addTask } from "../features/workspaceSlice";
 
-export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, projectId, folders = [] }) { // UPDATED
+export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, projectId }) {
 
     const { getToken } = useAuth();
     const dispatch = useDispatch();
@@ -25,7 +25,6 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         priority: "MEDIUM",
         assignees: [],
         due_date: "",
-        folderId: null, // NEW: Folder selection
     });
 
     // 🆕 NEW: State for task links (url + title)
@@ -195,7 +194,6 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                 priority: "MEDIUM",
                 assignees: [],
                 due_date: "",
-                folderId: null, // NEW: Reset folder selection
             });
             // 🆕 NEW: Reset links state
             setTaskLinks([]);
@@ -224,7 +222,6 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
             priority: "MEDIUM",
             assignees: [],
             due_date: "",
-            folderId: null, // NEW: Reset folder selection
         });
         // 🆕 NEW: Reset links state
         setTaskLinks([]);
@@ -266,31 +263,6 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                             className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                         />
                     </div>
-
-                    {/* NEW: Folder Selection */}
-                    {folders.length > 0 && (
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium flex items-center gap-2">
-                                <FolderIcon className="size-4" />
-                                Folder (Optional)
-                            </label>
-                            <select 
-                                value={formData.folderId || ""}
-                                onChange={(e) => setFormData({ ...formData, folderId: e.target.value || null })}
-                                className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="">No Folder (Project Root)</option>
-                                {folders.map((folder) => (
-                                    <option key={folder.id} value={folder.id}>
-                                        {folder.name}
-                                    </option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-gray-500 dark:text-zinc-400">
-                                Organize this task into a specific folder
-                            </p>
-                        </div>
-                    )}
 
                     {/* 🆕 NEW: Task Links Section */}
                     <div className="space-y-2">
