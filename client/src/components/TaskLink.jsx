@@ -1,4 +1,4 @@
-// components/TaskLink.js
+// components/TaskLink.js - UPDATED VERSION
 import React from 'react';
 import { LinkIcon, ExternalLinkIcon } from "lucide-react";
 
@@ -6,9 +6,9 @@ const TaskLink = ({ link }) => {
   const getDomainFromUrl = (url) => {
     try {
       const domain = new URL(url).hostname.replace('www.', '');
-      return domain;
+      return domain.length > 30 ? domain.substring(0, 30) + '...' : domain;
     } catch {
-      return url;
+      return url.length > 30 ? url.substring(0, 30) + '...' : url;
     }
   };
 
@@ -37,12 +37,14 @@ const TaskLink = ({ link }) => {
             src={faviconUrl} 
             alt="" 
             className="size-6 rounded"
+            onError={(e) => {
+              e.target.style.display = 'none';
+            }}
           />
-        ) : (
-          <div className="size-6 bg-blue-500 rounded flex items-center justify-center">
-            <LinkIcon className="size-3 text-white" />
-          </div>
-        )}
+        ) : null}
+        <div className={`size-6 bg-blue-500 rounded flex items-center justify-center ${faviconUrl ? 'hidden' : 'flex'}`}>
+          <LinkIcon className="size-3 text-white" />
+        </div>
       </div>
       
       <div className="flex-1 min-w-0">

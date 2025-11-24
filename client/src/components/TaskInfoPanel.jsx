@@ -1,6 +1,6 @@
-// components/TaskInfoPanel.js
+// components/TaskInfoPanel.js - UPDATED VERSION
 import React from 'react';
-import { Save, LinkIcon, PenIcon } from "lucide-react";
+import { Save, LinkIcon, PenIcon, ExternalLinkIcon } from "lucide-react";
 import { format } from "date-fns";
 import TaskHeader from './TaskHeader';
 import AssigneesManager from './AssigneesManager';
@@ -24,32 +24,35 @@ const TaskInfoPanel = ({
   onAddAssignee,
   onRemoveAssignee
 }) => {
+  // Enhanced content rendering with better URL detection
   const renderContentWithLinks = (content) => {
     if (!content) return null;
 
     const urlRegex = /(https?:\/\/[^\s<>{}\[\]\\^`|()]+[^\s<>{}\[\]\\^`|.,!?;)]\)?)/gi;
     
     const parts = content.split(urlRegex);
-    const matches = content.match(urlRegex) || [];
-
+    
     return parts.map((part, index) => {
-      if (matches.includes(part)) {
+      if (urlRegex.test(part)) {
         return (
           <a
             key={index}
             href={part}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+            className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 mx-1"
           >
-            {part}
+            {part.length > 50 ? part.substring(0, 50) + '...' : part}
             <ExternalLinkIcon className="size-3" />
           </a>
         );
       }
-      return part;
+      return <span key={index}>{part}</span>;
     });
   };
+
+  // Safe task links
+  const taskLinks = Array.isArray(task.links) ? task.links : [];
 
   return (
     <div className="w-full lg:w-1/2 flex flex-col gap-6">
@@ -82,15 +85,17 @@ const TaskInfoPanel = ({
           )
         )}
 
-        {/* Task Links */}
-        {task.links && task.links.length > 0 && (
+        {/* Task Links - ENHANCED: Better display */}
+        {taskLinks.length > 0 && (
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <LinkIcon className="size-4 text-gray-500 dark:text-zinc-500" />
-              <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">Attached Links</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">
+                Attached Links ({taskLinks.length})
+              </span>
             </div>
             <div className="space-y-2">
-              {task.links.map((link) => (
+              {taskLinks.map((link) => (
                 <TaskLink key={link.id} link={link} />
               ))}
             </div>

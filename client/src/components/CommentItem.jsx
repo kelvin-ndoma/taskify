@@ -1,11 +1,11 @@
-// components/CommentItem.js
+// components/CommentItem.js - UPDATED VERSION
 import React from 'react';
 import { format } from "date-fns";
 import { Edit3, Trash2, Save, X, ExternalLinkIcon, LinkIcon } from "lucide-react";
 import UserAvatar from './UserAvatar';
 
 const CommentItem = ({ 
-  comment, 
+  comment: rawComment, 
   user, 
   editingCommentId, 
   editingCommentContent, 
@@ -15,22 +15,31 @@ const CommentItem = ({
   onDeleteComment,
   onContentChange 
 }) => {
+  // Safe data normalization
+  const comment = {
+    ...rawComment,
+    links: Array.isArray(rawComment.links) ? rawComment.links : [],
+    user: rawComment.user || { id: 'unknown', name: 'Unknown User', email: '', image: '' }
+  };
+
   const canEditComment = comment.user.id === user?.id;
 
-  // Safe link access with fallback
-  const commentLinks = comment.links || [];
+  // Enhanced link validation
+  const validLinks = comment.links.filter(link => 
+    link && link.url && typeof link.url === 'string'
+  );
 
-  // Function to extract domain from URL
+  // Function to safely extract domain
   const getDomainFromUrl = (url) => {
     try {
       const domain = new URL(url).hostname.replace('www.', '');
-      return domain;
+      return domain.length > 30 ? domain.substring(0, 30) + '...' : domain;
     } catch {
-      return url;
+      return url.length > 30 ? url.substring(0, 30) + '...' : url;
     }
   };
 
-  // Function to get favicon
+  // Function to get favicon with error handling
   const getFaviconUrl = (url) => {
     try {
       const domain = new URL(url).hostname;
@@ -40,17 +49,16 @@ const CommentItem = ({
     }
   };
 
-  // Enhanced content rendering with better link detection
+  // Enhanced content rendering with better URL detection
   const renderContentWithLinks = (content) => {
     if (!content) return null;
 
-    // Improved URL regex to catch more URL patterns
+    // More comprehensive URL regex
     const urlRegex = /(https?:\/\/[^\s<>(){}|\\^`[\]]+)/gi;
     
     const parts = content.split(urlRegex);
     
     return parts.map((part, index) => {
-      // Check if this part is a URL
       if (urlRegex.test(part)) {
         return (
           <a
@@ -60,7 +68,7 @@ const CommentItem = ({
             rel="noopener noreferrer"
             className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 mx-1"
           >
-            {part}
+            {part.length > 50 ? part.substring(0, 50) + '...' : part}
             <ExternalLinkIcon className="size-3" />
           </a>
         );
@@ -148,17 +156,17 @@ const CommentItem = ({
         </div>
       )}
 
-      {/* Attached Links Section */}
-      {commentLinks.length > 0 && (
+      {/* Attached Links Section - FIXED: Only show if we have valid links */}
+      {validLinks.length > 0 && (
         <div className="mt-3 border-t border-gray-200 dark:border-zinc-600 pt-3">
           <div className="flex items-center gap-2 mb-2">
             <LinkIcon className="size-4 text-gray-500" />
             <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">
-              Attached Links ({commentLinks.length})
+              Attached Links ({validLinks.length})
             </span>
           </div>
           <div className="space-y-2">
-            {commentLinks.map((link) => {
+            {validLinks.map((link) => {
               const faviconUrl = getFaviconUrl(link.url);
               const domain = getDomainFromUrl(link.url);
               
@@ -178,7 +186,6 @@ const CommentItem = ({
                         className="size-5 rounded"
                         onError={(e) => {
                           e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
                         }}
                       />
                     ) : null}

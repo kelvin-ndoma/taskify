@@ -1,4 +1,4 @@
-// TaskDetails.jsx
+// TaskDetails.jsx - UPDATED VERSION
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { useSelector, useDispatch } from "react-redux";
@@ -26,6 +26,7 @@ const TaskDetails = () => {
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [commentLoading, setCommentLoading] = useState(false);
+  const [commentsLoading, setCommentsLoading] = useState(false); // NEW: Separate loading state for comments
   
   // Editing states
   const [isEditingTask, setIsEditingTask] = useState(false);
@@ -63,9 +64,11 @@ const TaskDetails = () => {
   const fetchComments = async () => {
     if (!taskId) return;
     try {
+      setCommentsLoading(true); // NEW: Set loading state
       const token = await getToken();
       if (!token) {
         console.warn("No valid token available for fetching comments.");
+        setCommentsLoading(false);
         return;
       }
 
@@ -74,13 +77,22 @@ const TaskDetails = () => {
       });
 
       if (data?.comments) {
-        setComments(data.comments);
+        console.log("📥 Fetched comments:", data.comments);
+        // NEW: Normalize comments data
+        const normalizedComments = data.comments.map(comment => ({
+          ...comment,
+          links: Array.isArray(comment.links) ? comment.links : [],
+          user: comment.user || { id: 'unknown', name: 'Unknown User' }
+        }));
+        setComments(normalizedComments);
       }
     } catch (error) {
       console.error("Failed to fetch comments:", error.response?.data || error.message);
       if (error.response?.status !== 404) {
         toast.error("Could not load comments.");
       }
+    } finally {
+      setCommentsLoading(false); // NEW: Clear loading state
     }
   };
 
@@ -98,14 +110,15 @@ const TaskDetails = () => {
       });
 
       if (data.task) {
-        console.log("Task with links:", data.task);
+        console.log("✅ Task with links:", data.task);
         
-        // Ensure assignees array exists and has proper structure
+        // Enhanced task normalization
         const safeTask = {
           ...data.task,
           assignees: Array.isArray(data.task.assignees) 
             ? data.task.assignees.filter(assignee => assignee?.user != null)
-            : []
+            : [],
+          links: Array.isArray(data.task.links) ? data.task.links : [] // NEW: Ensure links array
         };
         
         setTask(safeTask);
@@ -151,12 +164,13 @@ const TaskDetails = () => {
           return;
         }
 
-        // Ensure assignees array exists
+        // Enhanced task normalization for fallback
         const safeTask = {
           ...tsk,
           assignees: Array.isArray(tsk.assignees) 
             ? tsk.assignees.filter(assignee => assignee?.user != null)
-            : []
+            : [],
+          links: Array.isArray(tsk.links) ? tsk.links : [] // NEW: Ensure links array
         };
 
         setTask(safeTask);
@@ -191,12 +205,13 @@ const TaskDetails = () => {
         return;
       }
 
-      // Ensure assignees array exists
+      // Enhanced task normalization for fallback
       const safeTask = {
         ...tsk,
         assignees: Array.isArray(tsk.assignees) 
           ? tsk.assignees.filter(assignee => assignee?.user != null)
-          : []
+          : [],
+        links: Array.isArray(tsk.links) ? tsk.links : [] // NEW: Ensure links array
       };
 
       setTask(safeTask);
@@ -225,7 +240,7 @@ const TaskDetails = () => {
       setTaskLoading(true);
       const token = await getToken();
       
-      console.log("Updating task with data:", editingTaskData);
+      console.log("🔄 Updating task with data:", editingTaskData);
       
       const { data } = await api.put(
         `/api/tasks/${taskId}`,
@@ -233,14 +248,15 @@ const TaskDetails = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      console.log("Task update response:", data);
+      console.log("✅ Task update response:", data);
 
-      // Ensure assignees array exists in the updated task
+      // Enhanced task normalization for update
       const safeTask = {
         ...data.task,
         assignees: Array.isArray(data.task.assignees) 
           ? data.task.assignees.filter(assignee => assignee?.user != null)
-          : []
+          : [],
+        links: Array.isArray(data.task.links) ? data.task.links : [] // NEW: Ensure links array
       };
 
       setTask(safeTask);
@@ -248,7 +264,7 @@ const TaskDetails = () => {
       toast.success("Task updated successfully!");
       
     } catch (error) {
-      console.error("Update task error:", error);
+      console.error("❌ Update task error:", error);
       toast.error(error?.response?.data?.message || "Failed to update task");
     } finally {
       setTaskLoading(false);
@@ -275,12 +291,13 @@ const TaskDetails = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Ensure assignees array exists in the updated task
+      // Enhanced task normalization for assignee update
       const safeTask = {
         ...data.task,
         assignees: Array.isArray(data.task.assignees) 
           ? data.task.assignees.filter(assignee => assignee?.user != null)
-          : []
+          : [],
+        links: Array.isArray(data.task.links) ? data.task.links : [] // NEW: Ensure links array
       };
 
       setTask(safeTask);
@@ -289,7 +306,7 @@ const TaskDetails = () => {
       toast.success("Assignee added successfully!");
       
     } catch (error) {
-      console.error("Add assignee error:", error);
+      console.error("❌ Add assignee error:", error);
       toast.error(error?.response?.data?.message || "Failed to add assignee");
     }
   };
@@ -314,82 +331,118 @@ const TaskDetails = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Ensure assignees array exists in the updated task
+      // Enhanced task normalization for assignee removal
       const safeTask = {
         ...data.task,
         assignees: Array.isArray(data.task.assignees) 
           ? data.task.assignees.filter(assignee => assignee?.user != null)
-          : []
+          : [],
+        links: Array.isArray(data.task.links) ? data.task.links : [] // NEW: Ensure links array
       };
 
       setTask(safeTask);
       toast.success("Assignee removed successfully!");
       
     } catch (error) {
-      console.error("Remove assignee error:", error);
+      console.error("❌ Remove assignee error:", error);
       toast.error(error?.response?.data?.message || "Failed to remove assignee");
     }
   };
 
- const handleAddComment = async () => {
-  if (!newComment.trim() && commentLinks.length === 0) {
-    toast.error("Comment cannot be empty");
-    return;
-  }
+  const handleAddComment = async () => {
+    if (!newComment.trim() && commentLinks.length === 0) {
+      toast.error("Comment cannot be empty");
+      return;
+    }
 
-  try {
-    setCommentLoading(true);
-    toast.loading("Adding comment...");
-    const token = await getToken();
+    try {
+      setCommentLoading(true);
+      const loadingToast = toast.loading("Adding comment...");
+      const token = await getToken();
 
-    const linksData = commentLinks.map(link => ({
-      url: link.url
-    }));
+      const linksData = commentLinks.map(link => ({
+        url: link.url
+      }));
 
-    console.log("📤 Sending comment data:", {
-      taskId: task.id,
-      content: newComment,
-      links: linksData
-    });
-
-    const { data } = await api.post(
-      `/api/comments`,
-      { 
-        taskId: task.id, 
+      console.log("📤 Sending comment data:", {
+        taskId: task.id,
         content: newComment,
         links: linksData
-      },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+      });
 
-    console.log("📥 Comment creation response:", data);
-    console.log("🔗 Links in response:", data.comment?.links);
+      const { data } = await api.post(
+        `/api/comments`,
+        { 
+          taskId: task.id, 
+          content: newComment,
+          links: linksData
+        },
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          } 
+        }
+      );
 
-    // Ensure the response has the expected structure
-    if (data.comment) {
-      // Add the new comment to the beginning of the list
-      setComments((prev) => [data.comment, ...prev]);
+      console.log("📥 Comment creation response:", data);
       
-      // Clear the form
-      setNewComment("");
-      setCommentLinks([]);
-      setCommentLinkUrl("");
-      setShowCommentLinkInput(false);
+      // Enhanced response validation and normalization
+      if (data && data.comment) {
+        console.log("🔍 COMMENT RESPONSE INSPECTION:");
+        console.log("- Comment ID:", data.comment.id);
+        console.log("- Comment content:", data.comment.content);
+        console.log("- Links property exists:", 'links' in data.comment);
+        console.log("- Links is array:", Array.isArray(data.comment.links));
+        console.log("- Links count:", data.comment.links?.length || 0);
+        
+        if (data.comment.links && data.comment.links.length > 0) {
+          data.comment.links.forEach((link, index) => {
+            console.log(`  Link ${index}:`, link);
+          });
+        }
+
+        // Enhanced comment normalization
+        const normalizedComment = {
+          ...data.comment,
+          links: Array.isArray(data.comment.links) ? data.comment.links : [],
+          user: data.comment.user || user
+        };
+
+        console.log("✅ Normalized comment:", normalizedComment);
+        
+        // Add the new comment to the beginning of the list
+        setComments((prev) => [normalizedComment, ...prev]);
+        
+        // Clear the form
+        setNewComment("");
+        setCommentLinks([]);
+        setCommentLinkUrl("");
+        setShowCommentLinkInput(false);
+        
+        toast.dismiss(loadingToast);
+        toast.success("Comment added successfully!");
+      } else {
+        throw new Error("Invalid response format - no comment in response");
+      }
+    } catch (error) {
+      console.error("❌ Add comment error:", error);
+      console.error("❌ Error response:", error.response);
       
-      toast.dismissAll();
-      toast.success("Comment added successfully!");
-    } else {
-      throw new Error("Invalid response format");
+      // Enhanced error handling
+      let errorMessage = "Failed to add comment";
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.dismiss();
+      toast.error(errorMessage);
+    } finally {
+      setCommentLoading(false);
     }
-  } catch (error) {
-    toast.dismissAll();
-    console.error("❌ Add comment error:", error);
-    console.error("❌ Error response:", error.response);
-    toast.error(error?.response?.data?.message || error.message || "Failed to add comment");
-  } finally {
-    setCommentLoading(false);
-  }
-};
+  };
 
   const addCommentLink = () => {
     if (!commentLinkUrl.trim()) {
@@ -448,8 +501,15 @@ const TaskDetails = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      // Enhanced comment normalization for update
+      const updatedComment = {
+        ...data.comment,
+        links: Array.isArray(data.comment.links) ? data.comment.links : [],
+        user: data.comment.user || user
+      };
+
       setComments(prev => prev.map(comment => 
-        comment.id === commentId ? data.comment : comment
+        comment.id === commentId ? updatedComment : comment
       ));
       
       setEditingCommentId(null);
@@ -457,7 +517,7 @@ const TaskDetails = () => {
       toast.success("Comment updated successfully!");
       
     } catch (error) {
-      console.error("Update comment error:", error);
+      console.error("❌ Update comment error:", error);
       toast.error(error?.response?.data?.message || "Failed to update comment");
     }
   };
@@ -479,7 +539,7 @@ const TaskDetails = () => {
       toast.success("Comment deleted successfully!");
       
     } catch (error) {
-      console.error("Delete comment error:", error);
+      console.error("❌ Delete comment error:", error);
       toast.error(error?.response?.data?.message || "Failed to delete comment");
     }
   };
@@ -506,21 +566,6 @@ const TaskDetails = () => {
     setCommentLinkUrl(e.target.value);
   };
 
-  // Debug useEffect to check comment data
-  useEffect(() => {
-    console.log("=== COMMENT DATA DEBUG ===");
-    console.log("All comments:", comments);
-    comments.forEach((comment, index) => {
-      console.log(`Comment ${index}:`, {
-        id: comment.id,
-        content: comment.content,
-        linksCount: comment.links?.length || 0,
-        links: comment.links
-      });
-    });
-    console.log("=== END DEBUG ===");
-  }, [comments]);
-
   // useEffect hooks
   useEffect(() => {
     fetchTaskDetails();
@@ -537,16 +582,16 @@ const TaskDetails = () => {
 
   useEffect(() => {
     if (task) {
-      console.log("Current task data:", task);
-      console.log("Task assignees:", task.assignees);
-      console.log("Task links:", task.links);
-      console.log("Task description:", task.description);
+      console.log("🔍 Current task data:", task);
+      console.log("👥 Task assignees:", task.assignees);
+      console.log("🔗 Task links:", task.links);
+      console.log("📝 Task description:", task.description);
       
       // Debug: Check for problematic assignees
       if (task.assignees) {
         task.assignees.forEach((assignee, index) => {
           if (!assignee?.user?.id) {
-            console.warn(`Problematic assignee at index ${index}:`, assignee);
+            console.warn(`⚠️ Problematic assignee at index ${index}:`, assignee);
           }
         });
       }
@@ -566,6 +611,7 @@ const TaskDetails = () => {
         showCommentLinkInput={showCommentLinkInput}
         commentLinkUrl={commentLinkUrl}
         commentLoading={commentLoading}
+        commentsLoading={commentsLoading} // NEW: Pass loading state
         editingCommentId={editingCommentId}
         editingCommentContent={editingCommentContent}
         onCommentChange={handleCommentChange}
