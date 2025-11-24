@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar as CalendarIcon, XIcon, Users, LinkIcon, PlusIcon, PaperclipIcon } from "lucide-react";
+import { Calendar as CalendarIcon, XIcon, Users, LinkIcon, PlusIcon, PaperclipIcon, FolderIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { format } from "date-fns";
 import { useAuth } from "@clerk/clerk-react";
@@ -7,7 +7,7 @@ import api from "../configs/api";
 import toast from "react-hot-toast";
 import { addTask } from "../features/workspaceSlice";
 
-export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, projectId }) {
+export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, projectId, folders = [] }) {
 
     const { getToken } = useAuth();
     const dispatch = useDispatch();
@@ -25,6 +25,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         priority: "MEDIUM",
         assignees: [],
         due_date: "",
+        folderId: "", // NEW: Add folderId to form data
     });
 
     // 🆕 NEW: State for task links (url + title)
@@ -172,14 +173,17 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                 title: link.title || null // Send null if no title
             }));
 
+            // 🆕 Prepare task data with folderId (convert empty string to null)
+            const taskData = {
+                ...formData,
+                folderId: formData.folderId || null, // Convert empty string to null
+                links: linksData,
+                projectId 
+            };
+
             const { data } = await api.post(
                 '/api/tasks', 
-                { 
-                    ...formData, 
-                    links: linksData, // 🆕 NEW: Include links in request
-                    workspaceId: currentWorkspace.id, 
-                    projectId 
-                }, 
+                taskData,
                 { 
                     headers: { Authorization: `Bearer ${token}` } 
                 }
@@ -194,6 +198,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                 priority: "MEDIUM",
                 assignees: [],
                 due_date: "",
+                folderId: "", // Reset folderId
             });
             // 🆕 NEW: Reset links state
             setTaskLinks([]);
@@ -222,6 +227,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
             priority: "MEDIUM",
             assignees: [],
             due_date: "",
+            folderId: "", // Reset folderId
         });
         // 🆕 NEW: Reset links state
         setTaskLinks([]);
@@ -246,7 +252,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                         <label htmlFor="title" className="text-sm font-medium">Title *</label>
                         <input 
                             value={formData.title} 
-                            onChange={(e) => setFormData({ ...formData, title: e.target.value })} 
+                            onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))} 
                             placeholder="Task title" 
                             className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             required 
@@ -258,11 +264,36 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                         <label htmlFor="description" className="text-sm font-medium">Description</label>
                         <textarea 
                             value={formData.description} 
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
+                            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))} 
                             placeholder="Describe the task" 
                             className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                         />
                     </div>
+
+                    {/* 🆕 NEW: Folder Selection */}
+                    {folders.length > 0 && (
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <FolderIcon className="size-4" />
+                                Folder (Optional)
+                            </label>
+                            <select 
+                                value={formData.folderId} 
+                                onChange={(e) => setFormData(prev => ({ ...prev, folderId: e.target.value }))}
+                                className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">No Folder (Project Root)</option>
+                                {folders.map((folder) => (
+                                    <option key={folder.id} value={folder.id}>
+                                        {folder.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                Organize this task into a specific folder
+                            </p>
+                        </div>
+                    )}
 
                     {/* 🆕 NEW: Task Links Section */}
                     <div className="space-y-2">
@@ -339,7 +370,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                             <label className="text-sm font-medium">Type</label>
                             <select 
                                 value={formData.type} 
-                                onChange={(e) => setFormData({ ...formData, type: e.target.value })} 
+                                onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))} 
                                 className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             >
                                 <option value="GENERAL_TASK">General Task</option>
@@ -355,7 +386,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                             <label className="text-sm font-medium">Priority</label>
                             <select 
                                 value={formData.priority} 
-                                onChange={(e) => setFormData({ ...formData, priority: e.target.value })} 
+                                onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))} 
                                 className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             >
                                 <option value="LOW">Low</option>
@@ -426,7 +457,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                         <label className="text-sm font-medium">Status</label>
                         <select 
                             value={formData.status} 
-                            onChange={(e) => setFormData({ ...formData, status: e.target.value })} 
+                            onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))} 
                             className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                         >
                             <option value="TODO">To Do</option>
@@ -445,7 +476,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                             <input 
                                 type="date" 
                                 value={formData.due_date} 
-                                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })} 
+                                onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))} 
                                 min={new Date().toISOString().split('T')[0]} 
                                 className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             />
