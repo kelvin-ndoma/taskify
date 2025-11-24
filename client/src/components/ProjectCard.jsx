@@ -9,6 +9,10 @@ const statusColors = {
 };
 
 const ProjectCard = ({ project }) => {
+    // Calculate total tasks including folder tasks
+    const totalTasks = (project.tasks?.length || 0) + 
+                      (project.folders?.reduce((total, folder) => total + (folder.tasks?.length || 0), 0) || 0);
+
     return (
         <Link to={`/projectsDetail?id=${project.id}&tab=tasks`} className="bg-white dark:bg-zinc-950 dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-gray-200 dark:border-zinc-800 hover:border-gray-300 dark:hover:border-zinc-700 rounded-lg p-5 transition-all duration-200 group">
             {/* Header */}
@@ -32,6 +36,15 @@ const ProjectCard = ({ project }) => {
                 </span>
             </div>
 
+            {/* 🆕 NEW: Project Stats */}
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400 mb-4">
+                <span>{totalTasks} tasks</span>
+                <span>•</span>
+                <span>{project.folders?.length || 0} folders</span>
+                <span>•</span>
+                <span>{project.members?.length || 0} members</span>
+            </div>
+
             {/* Progress */}
             <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -42,8 +55,7 @@ const ProjectCard = ({ project }) => {
                     <div className="h-1.5 rounded bg-blue-500" style={{ width: `${project.progress || 0}%` }} />
                 </div>
             </div>
-
-            </Link>
+        </Link>
     );
 };
 

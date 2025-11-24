@@ -173,7 +173,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                 title: link.title || null // Send null if no title
             }));
 
-            // 🆕 Prepare task data with folderId (convert empty string to null)
+            // 🆕 FIXED: Prepare task data with folderId (convert empty string to null)
             const taskData = {
                 ...formData,
                 folderId: formData.folderId || null, // Convert empty string to null
@@ -181,9 +181,15 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                 projectId 
             };
 
+            // 🆕 FIXED: Remove folderId from the main data if it's null
+            const finalTaskData = { ...taskData };
+            if (finalTaskData.folderId === null) {
+                delete finalTaskData.folderId;
+            }
+
             const { data } = await api.post(
                 '/api/tasks', 
-                taskData,
+                finalTaskData,
                 { 
                     headers: { Authorization: `Bearer ${token}` } 
                 }
@@ -270,8 +276,8 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                         />
                     </div>
 
-                    {/* 🆕 NEW: Folder Selection */}
-                    {folders.length > 0 && (
+                    {/* 🆕 NEW: Folder Selection - FIXED */}
+                    {folders && folders.length > 0 && (
                         <div className="space-y-1">
                             <label className="text-sm font-medium flex items-center gap-2">
                                 <FolderIcon className="size-4" />

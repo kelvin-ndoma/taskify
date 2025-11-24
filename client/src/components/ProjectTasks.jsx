@@ -1,11 +1,10 @@
-// components/ProjectTasks.jsx
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { deleteTask, updateTask } from "../features/workspaceSlice";
-import { CalendarIcon, Trash, XIcon, Users, Mail, User, Heart, Circle, Square } from "lucide-react";
+import { CalendarIcon, Trash, XIcon, Users, Mail, User, Heart, Circle, Square, FolderIcon } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
 import api from "../configs/api";
 
@@ -55,11 +54,16 @@ const UserAvatar = ({ user, size = 5 }) => {
     );
 };
 
-const ProjectTasks = ({ tasks }) => {
+const ProjectTasks = ({ tasks, folders, projectId }) => {
     const { getToken } = useAuth();
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [selectedTasks, setSelectedTasks] = useState([]);
+
+    // 🆕 NEW: Get folderId from URL if viewing folder tasks
+    const folderId = searchParams.get('folderId');
+    const currentFolder = folderId ? folders?.find(f => f.id === folderId) : null;
 
     const [filters, setFilters] = useState({
         status: "",
@@ -68,16 +72,29 @@ const ProjectTasks = ({ tasks }) => {
         assignee: "",
     });
 
+    // 🆕 UPDATED: Get tasks based on whether we're viewing folder or project tasks
+    const getTasksToDisplay = () => {
+        if (folderId && currentFolder) {
+            // Show tasks from specific folder
+            return currentFolder.tasks || [];
+        } else {
+            // Show tasks from project root (no folder)
+            return tasks.filter(task => !task.folderId);
+        }
+    };
+
+    const tasksToDisplay = getTasksToDisplay();
+
     // 🆕 Fix: Get unique assignee names from multiple assignees
     const assigneeList = useMemo(() => {
-        const allAssignees = tasks.flatMap(task => 
+        const allAssignees = tasksToDisplay.flatMap(task => 
             task.assignees?.map(assignee => assignee.user?.name).filter(Boolean) || []
         );
         return Array.from(new Set(allAssignees));
-    }, [tasks]);
+    }, [tasksToDisplay]);
 
     const filteredTasks = useMemo(() => {
-        return tasks.filter((task) => {
+        return tasksToDisplay.filter((task) => {
             const { status, type, priority, assignee } = filters;
             
             // 🆕 Fix: Check if any assignee matches the filter
@@ -91,7 +108,7 @@ const ProjectTasks = ({ tasks }) => {
                 hasMatchingAssignee
             );
         });
-    }, [filters, tasks]);
+    }, [filters, tasksToDisplay]);
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -109,7 +126,7 @@ const ProjectTasks = ({ tasks }) => {
                 headers: { Authorization: `Bearer ${token}` } 
             });
 
-            let updatedTask = structuredClone(tasks.find((t) => t.id === taskId));
+            let updatedTask = structuredClone(tasksToDisplay.find((t) => t.id === taskId));
             updatedTask.status = newStatus;
             dispatch(updateTask(updatedTask));
 
@@ -145,6 +162,30 @@ const ProjectTasks = ({ tasks }) => {
             toast.dismissAll();
             toast.error(error?.response?.data?.message || error.message);
         }
+    };
+
+    // 🆕 NEW: Folder header for folder tasks
+    const renderFolderHeader = () => {
+        if (!folderId || !currentFolder) return null;
+
+        return (
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center gap-3">
+                    <FolderIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    <div>
+                        <h2 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                            {currentFolder.name}
+                        </h2>
+                        <p className="text-blue-700 dark:text-blue-300 text-sm">
+                            {currentFolder.description || "Folder tasks"}
+                        </p>
+                        <p className="text-blue-600 dark:text-blue-400 text-xs mt-1">
+                            {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} in this folder
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     // 🆕 Render assignees for a task
@@ -210,6 +251,9 @@ const ProjectTasks = ({ tasks }) => {
 
     return (
         <div>
+            {/* 🆕 NEW: Folder Header */}
+            {renderFolderHeader()}
+
             {/* Filters */}
             <div className="flex flex-wrap gap-4 mb-4">
                 {["status", "type", "priority", "assignee"].map((name) => {
@@ -285,6 +329,19 @@ const ProjectTasks = ({ tasks }) => {
                     </button>
                 )}
             </div>
+
+            {/* 🆕 NEW: Empty state for folder tasks */}
+            {folderId && filteredTasks.length === 0 && (
+                <div className="text-center py-12 border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-lg">
+                    <FolderIcon className="w-12 h-12 text-zinc-400 dark:text-zinc-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-zinc-900 dark:text-white mb-2">
+                        No tasks in this folder
+                    </h3>
+                    <p className="text-zinc-500 dark:text-zinc-400 mb-4">
+                        Create tasks inside this folder to get started.
+                    </p>
+                </div>
+            )}
 
             {/* Tasks Table */}
             <div className="overflow-auto rounded-lg lg:border border-zinc-300 dark:border-zinc-800">
@@ -383,11 +440,13 @@ const ProjectTasks = ({ tasks }) => {
                                         );
                                     })
                                 ) : (
-                                    <tr>
-                                        <td colSpan="7" className="text-center text-zinc-500 dark:text-zinc-400 py-6">
-                                            No tasks found for the selected filters.
-                                        </td>
-                                    </tr>
+                                    !folderId && (
+                                        <tr>
+                                            <td colSpan="7" className="text-center text-zinc-500 dark:text-zinc-400 py-6">
+                                                No tasks found for the selected filters.
+                                            </td>
+                                        </tr>
+                                    )
                                 )}
                             </tbody>
                         </table>
@@ -464,9 +523,11 @@ const ProjectTasks = ({ tasks }) => {
                                 );
                             })
                         ) : (
-                            <p className="text-center text-zinc-500 dark:text-zinc-400 py-4">
-                                No tasks found for the selected filters.
-                            </p>
+                            !folderId && (
+                                <p className="text-center text-zinc-500 dark:text-zinc-400 py-4">
+                                    No tasks found for the selected filters.
+                                </p>
+                            )
                         )}
                     </div>
                 </div>
