@@ -1,4 +1,4 @@
-// TaskDetails.jsx - COMPLETE OPTIMIZED VERSION
+// TaskDetails.jsx - FIXED VERSION
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { useSelector, useDispatch } from "react-redux";
@@ -61,7 +61,7 @@ const TaskDetails = () => {
     return isWorkspaceAdmin || isProjectLead || isTaskAssignee;
   };
 
-  // Smart comment fetching with optimized updates
+  // FIXED: fetchComments function - removed dependencies that cause re-fetching
   const fetchComments = useCallback(async (silent = false) => {
     if (!taskId) return;
     
@@ -88,29 +88,8 @@ const TaskDetails = () => {
           user: comment.user || { id: 'unknown', name: 'Unknown User' }
         }));
 
-        // Smart update: Only update state if comments actually changed
-        const currentCommentIds = new Set(comments.map(c => c.id));
-        const newCommentIds = new Set(normalizedComments.map(c => c.id));
-        
-        const hasNewComments = normalizedComments.length !== comments.length || 
-                             !normalizedComments.every(comment => currentCommentIds.has(comment.id));
-        
-        if (hasNewComments) {
-          console.log("🔄 New comments detected, updating...");
-          setComments(normalizedComments);
-          setLastCommentUpdate(new Date());
-          
-          // Show subtle notification for new comments (only if user isn't actively typing)
-          if (silent && newCommentIds.size > currentCommentIds.size && !newComment.trim()) {
-            const newCount = normalizedComments.length - comments.length;
-            toast.success(`${newCount} new comment${newCount > 1 ? 's' : ''}`, {
-              duration: 2000,
-              position: 'bottom-right'
-            });
-          }
-        } else if (!silent) {
-          console.log("✅ Comments are up to date");
-        }
+        setComments(normalizedComments);
+        setLastCommentUpdate(new Date());
       }
     } catch (error) {
       console.error("Failed to fetch comments:", error.response?.data || error.message);
@@ -122,7 +101,7 @@ const TaskDetails = () => {
         setCommentsLoading(false);
       }
     }
-  }, [taskId, comments, newComment, getToken]);
+  }, [taskId, getToken]); // FIXED: Removed 'comments' and 'newComment' dependencies
 
   const fetchTaskDetails = async () => {
     setLoading(true);
@@ -572,15 +551,18 @@ const TaskDetails = () => {
     }
   };
 
-  const handleKeyPress = (e) => {
+  // FIXED: Simplified key press handler
+  const handleKeyPress = useCallback((e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
       handleAddComment();
     }
-  };
+  }, [handleAddComment]);
 
-  const handleCommentChange = (e) => {
+  // FIXED: Simplified comment change handler
+  const handleCommentChange = useCallback((e) => {
     setNewComment(e.target.value);
-  };
+  }, []);
 
   const handleEditingCommentContentChange = (content) => {
     setEditingCommentContent(content);
@@ -594,61 +576,25 @@ const TaskDetails = () => {
     setCommentLinkUrl(e.target.value);
   };
 
-  // Smart comment polling with tab visibility detection
+  // FIXED: Simplified useEffect for comment fetching
   useEffect(() => {
     if (!taskId) return;
     
     // Initial load
     fetchComments(false);
     
-    // Smart polling: Only poll if the tab is visible and user is active
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        console.log("📱 Tab hidden, pausing comment updates");
-      } else {
-        console.log("📱 Tab visible, resuming comment updates");
-        fetchComments(true); // Silent update when tab becomes visible
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Smart interval: Only fetch if tab is visible
+    // Set up polling interval
     const interval = setInterval(() => {
-      if (!document.hidden) {
-        fetchComments(true); // Silent background update
-      }
-    }, 45000); // Increased to 45 seconds for better UX
+      fetchComments(true);
+    }, 30000);
 
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [taskId, fetchComments]);
+    return () => clearInterval(interval);
+  }, [taskId, fetchComments]); // FIXED: Only depend on taskId and fetchComments
 
   // Task details effect
   useEffect(() => {
     fetchTaskDetails();
   }, [taskId, projectId, currentWorkspace]);
-
-  // Debug effect for task data
-  useEffect(() => {
-    if (task) {
-      console.log("🔍 Current task data:", task);
-      console.log("👥 Task assignees:", task.assignees);
-      console.log("🔗 Task links:", task.links);
-      console.log("📝 Task description:", task.description);
-      
-      // Debug: Check for problematic assignees
-      if (task.assignees) {
-        task.assignees.forEach((assignee, index) => {
-          if (!assignee?.user?.id) {
-            console.warn(`⚠️ Problematic assignee at index ${index}:`, assignee);
-          }
-        });
-      }
-    }
-  }, [task]);
 
   if (loading) return <div className="text-gray-500 dark:text-zinc-400 px-4 py-6">Loading task details...</div>;
   if (!task) return <div className="text-red-500 px-4 py-6">Task not found.</div>;

@@ -1,6 +1,6 @@
-// components/CommentsSection.js - OPTIMIZED VERSION
+// components/CommentsSection.js - FIXED VERSION
 import React, { memo, useMemo } from 'react';
-import { MessageCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { MessageCircle, RefreshCw } from "lucide-react";
 import CommentItem from './CommentItem';
 import CommentForm from './CommentForm';
 
@@ -28,10 +28,12 @@ const CommentsSection = memo(({
   onLinkUrlChange,
   onAddCommentLink,
   onRemoveCommentLink,
-  onRefreshComments, // NEW: Manual refresh function
-  lastUpdate // NEW: Track when comments were last updated
+  onRefreshComments,
+  lastUpdate
 }) => {
   
+  console.log("🎯 CommentsSection rendering, commentsLoading:", commentsLoading);
+
   // Optimized comments normalization with useMemo
   const comments = useMemo(() => 
     Array.isArray(rawComments) 
@@ -41,13 +43,13 @@ const CommentsSection = memo(({
           user: comment.user || { id: 'unknown', name: 'Unknown User' }
         }))
       : [],
-    [rawComments] // Only recalculate when rawComments changes
+    [rawComments]
   );
 
   // Memoize comment items to prevent re-renders
   const commentItems = useMemo(() => 
     comments.map((comment) => (
-      <MemoizedCommentItem
+      <CommentItem
         key={comment.id}
         comment={comment}
         user={user}
@@ -63,7 +65,6 @@ const CommentsSection = memo(({
     [comments, user, editingCommentId, editingCommentContent]
   );
 
-  const [debugMode, setDebugMode] = React.useState(false);
   const [manualRefreshing, setManualRefreshing] = React.useState(false);
 
   // Manual refresh with visual feedback
@@ -72,9 +73,8 @@ const CommentsSection = memo(({
     
     setManualRefreshing(true);
     if (onRefreshComments) {
-      await onRefreshComments(false); // Non-silent refresh
+      await onRefreshComments(false);
     }
-    // Reset refreshing state after a minimum time for better UX
     setTimeout(() => setManualRefreshing(false), 1000);
   };
 
@@ -142,16 +142,6 @@ const CommentsSection = memo(({
             >
               <RefreshCw className={`size-3.5 ${manualRefreshing ? 'animate-spin' : ''}`} />
             </button>
-
-            {/* Debug toggle - remove in production */}
-            {process.env.NODE_ENV === 'development' && (
-              <button
-                onClick={() => setDebugMode(!debugMode)}
-                className="text-xs bg-gray-200 dark:bg-zinc-700 px-2 py-1 rounded"
-              >
-                {debugMode ? '❌ Debug' : '🐛 Debug'}
-              </button>
-            )}
           </div>
         </div>
 
@@ -188,10 +178,6 @@ const CommentsSection = memo(({
   );
 });
 
-// Memoized CommentItem to prevent unnecessary re-renders
-const MemoizedCommentItem = memo(CommentItem);
-
-// Add display name for better dev tools
 CommentsSection.displayName = 'CommentsSection';
 
 export default CommentsSection;
