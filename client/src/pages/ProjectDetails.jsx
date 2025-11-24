@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeftIcon, PlusIcon, SettingsIcon, BarChart3Icon, CalendarIcon, FileStackIcon, ZapIcon, FolderIcon } from "lucide-react";
+import { ArrowLeftIcon, PlusIcon, SettingsIcon, BarChart3Icon, CalendarIcon, FileStackIcon, ZapIcon } from "lucide-react";
 import ProjectAnalytics from "../components/ProjectAnalytics";
 import ProjectSettings from "../components/ProjectSettings";
 import CreateTaskDialog from "../components/CreateTaskDialog";
 import ProjectCalendar from "../components/ProjectCalendar";
 import ProjectTasks from "../components/ProjectTasks";
-import ProjectFolders from "../components/ProjectFolders";
 
 export default function ProjectDetail() {
 
@@ -20,7 +19,6 @@ export default function ProjectDetail() {
 
     const [project, setProject] = useState(null);
     const [tasks, setTasks] = useState([]);
-    const [folders, setFolders] = useState([]);
     const [showCreateTask, setShowCreateTask] = useState(false);
     const [activeTab, setActiveTab] = useState(tab || "tasks");
 
@@ -33,7 +31,6 @@ export default function ProjectDetail() {
             const proj = projects.find((p) => p.id === id);
             setProject(proj);
             setTasks(proj?.tasks || []);
-            setFolders(proj?.folders || []);
         }
     }, [id, projects]);
 
@@ -45,25 +42,18 @@ export default function ProjectDetail() {
         CANCELLED: "bg-red-200 text-red-900 dark:bg-red-500 dark:text-red-900",
     };
 
-    // 🆕 UPDATED: Correct task counting including folder tasks
+    // 🆕 UPDATED: Correct task counting with new statuses
     const getTaskCounts = () => {
-        // Combine tasks from project root and all folders
-        const allTasks = [
-            ...tasks, // Tasks in project root
-            ...folders.flatMap(folder => folder.tasks || []) // Tasks in folders
-        ];
-
         return {
-            total: allTasks.length,
-            completed: allTasks.filter((t) => t.status === "DONE").length,
-            todo: allTasks.filter((t) => t.status === "TODO").length,
-            inProgress: allTasks.filter((t) => t.status === "IN_PROGRESS").length,
-            internalReview: allTasks.filter((t) => t.status === "INTERNAL_REVIEW").length,
-            cancelled: allTasks.filter((t) => t.status === "CANCELLED").length,
-            inProgressAndTodo: allTasks.filter((t) => 
+            total: tasks.length,
+            completed: tasks.filter((t) => t.status === "DONE").length,
+            todo: tasks.filter((t) => t.status === "TODO").length,
+            inProgress: tasks.filter((t) => t.status === "IN_PROGRESS").length,
+            internalReview: tasks.filter((t) => t.status === "INTERNAL_REVIEW").length,
+            cancelled: tasks.filter((t) => t.status === "CANCELLED").length,
+            inProgressAndTodo: tasks.filter((t) => 
                 t.status === "IN_PROGRESS" || t.status === "TODO" || t.status === "INTERNAL_REVIEW"
-            ).length,
-            totalFolders: folders.length
+            ).length
         };
     };
 
@@ -109,7 +99,6 @@ export default function ProjectDetail() {
                     { label: "In Progress", value: taskCounts.inProgress, color: "text-amber-700 dark:text-amber-400" },
                     { label: "To Do", value: taskCounts.todo, color: "text-blue-700 dark:text-blue-400" },
                     { label: "Internal Review", value: taskCounts.internalReview, color: "text-purple-700 dark:text-purple-400" },
-                    { label: "Folders", value: taskCounts.totalFolders, color: "text-orange-700 dark:text-orange-400" },
                     { label: "Team Members", value: project.members?.length || 0, color: "text-indigo-700 dark:text-indigo-400" },
                 ].map((card, idx) => (
                     <div key={idx} className=" dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 flex justify-between sm:min-w-60 p-4 py-2.5 rounded">
@@ -122,12 +111,11 @@ export default function ProjectDetail() {
                 ))}
             </div>
 
-            {/* Tabs - UPDATED */}
+            {/* Tabs */}
             <div>
                 <div className="inline-flex flex-wrap max-sm:grid grid-cols-3 gap-2 border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
                     {[
                         { key: "tasks", label: "Tasks", icon: FileStackIcon },
-                        { key: "folders", label: "Folders", icon: FolderIcon },
                         { key: "calendar", label: "Calendar", icon: CalendarIcon },
                         { key: "analytics", label: "Analytics", icon: BarChart3Icon },
                         { key: "settings", label: "Settings", icon: SettingsIcon },
@@ -142,22 +130,17 @@ export default function ProjectDetail() {
                 <div className="mt-6">
                     {activeTab === "tasks" && (
                         <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectTasks tasks={tasks} folders={folders} projectId={id} />
-                        </div>
-                    )}
-                    {activeTab === "folders" && (
-                        <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectFolders folders={folders} projectId={id} />
+                            <ProjectTasks tasks={tasks} />
                         </div>
                     )}
                     {activeTab === "analytics" && (
                         <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectAnalytics tasks={tasks} project={project} folders={folders} />
+                            <ProjectAnalytics tasks={tasks} project={project} />
                         </div>
                     )}
                     {activeTab === "calendar" && (
                         <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
-                            <ProjectCalendar tasks={tasks} folders={folders} />
+                            <ProjectCalendar tasks={tasks} />
                         </div>
                     )}
                     {activeTab === "settings" && (
@@ -169,14 +152,7 @@ export default function ProjectDetail() {
             </div>
 
             {/* Create Task Modal */}
-            {showCreateTask && (
-                <CreateTaskDialog 
-                    showCreateTask={showCreateTask} 
-                    setShowCreateTask={setShowCreateTask} 
-                    projectId={id} 
-                    folders={folders} 
-                />
-            )}
+            {showCreateTask && <CreateTaskDialog showCreateTask={showCreateTask} setShowCreateTask={setShowCreateTask} projectId={id} />}
         </div>
     );
 }
