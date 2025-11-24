@@ -38,7 +38,7 @@ export const addComment = async (req, res) => {
       }
     }
 
-    // Get task with project and access info
+    // Get task with project and access info - UPDATED: Include folder info
     const task = await prisma.task.findUnique({
       where: { id: taskId },
       include: {
@@ -51,6 +51,13 @@ export const addComment = async (req, res) => {
             },
             members: true
           }
+        },
+        folder: { // NEW: Include folder info
+          select: {
+            id: true,
+            name: true,
+            projectId: true
+          }
         }
       }
     });
@@ -59,7 +66,7 @@ export const addComment = async (req, res) => {
       return res.status(404).json({ message: "Task not found." });
     }
 
-    // Check if user has access to the task
+    // Check if user has access to the task - UPDATED: Consider folder context
     const hasAccess = task.project.members.some(member => member.userId === userId) ||
                      task.project.workspace.members.some(member => member.userId === userId);
 
@@ -103,7 +110,7 @@ export const addComment = async (req, res) => {
           console.log(`✅ Created ${links.length} comment links for comment ${comment.id}`);
         }
 
-        // Step 3: Fetch the complete comment with all relationships
+        // Step 3: Fetch the complete comment with all relationships - UPDATED: Include task with folder
         const completeComment = await tx.comment.findUnique({
           where: { id: comment.id },
           include: {
@@ -129,13 +136,33 @@ export const addComment = async (req, res) => {
                 createdAt: 'asc'
               }
             },
+            task: { // NEW: Include task with folder info
+              select: {
+                id: true,
+                title: true,
+                folderId: true,
+                folder: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                },
+                project: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                }
+              }
+            }
           },
         });
 
         console.log(`📊 Complete comment fetched:`, {
           id: completeComment.id,
           linksCount: completeComment.links?.length || 0,
-          links: completeComment.links || []
+          links: completeComment.links || [],
+          taskFolder: completeComment.task.folder
         });
 
         return completeComment;
@@ -157,6 +184,7 @@ export const addComment = async (req, res) => {
           commentId: result.id,
           commenterId: userId,
           containsLinks: result.links?.length > 0,
+          taskFolder: result.task.folder?.name || null, // NEW: Include folder info
           origin: origin || process.env.FRONTEND_URL || "http://localhost:3000",
         },
       });
@@ -222,7 +250,7 @@ export const updateComment = async (req, res) => {
       }
     }
 
-    // Find the comment
+    // Find the comment - UPDATED: Include folder info
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
       include: {
@@ -239,6 +267,12 @@ export const updateComment = async (req, res) => {
         },
         task: {
           include: {
+            folder: { // NEW: Include folder
+              select: {
+                id: true,
+                name: true
+              }
+            },
             project: {
               include: {
                 workspace: {
@@ -310,7 +344,7 @@ export const updateComment = async (req, res) => {
           }
         }
 
-        // Fetch the complete updated comment
+        // Fetch the complete updated comment - UPDATED: Include task with folder
         const completeComment = await tx.comment.findUnique({
           where: { id: commentId },
           include: {
@@ -336,12 +370,32 @@ export const updateComment = async (req, res) => {
                 createdAt: 'asc'
               }
             },
+            task: { // NEW: Include task with folder info
+              select: {
+                id: true,
+                title: true,
+                folderId: true,
+                folder: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                },
+                project: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                }
+              }
+            }
           },
         });
 
         console.log(`📊 Updated comment fetched:`, {
           id: completeComment.id,
-          linksCount: completeComment.links?.length || 0
+          linksCount: completeComment.links?.length || 0,
+          taskFolder: completeComment.task.folder
         });
 
         return completeComment;
@@ -379,10 +433,16 @@ export const getTaskComments = async (req, res) => {
       return res.status(400).json({ message: "Task ID is required." });
     }
 
-    // Verify task exists and user has access
+    // Verify task exists and user has access - UPDATED: Include folder info
     const task = await prisma.task.findUnique({
       where: { id: taskId },
       include: {
+        folder: { // NEW: Include folder
+          select: {
+            id: true,
+            name: true
+          }
+        },
         project: {
           include: {
             workspace: {
@@ -435,16 +495,36 @@ export const getTaskComments = async (req, res) => {
             createdAt: 'asc'
           }
         },
+        task: { // NEW: Include task with folder info
+          select: {
+            id: true,
+            title: true,
+            folderId: true,
+            folder: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
       },
       orderBy: { createdAt: "desc" },
     });
 
     console.log(`📊 Found ${comments.length} comments for task ${taskId}`);
     comments.forEach(comment => {
-      console.log(`   - Comment ${comment.id}: ${comment.links?.length || 0} links`);
+      console.log(`   - Comment ${comment.id}: ${comment.links?.length || 0} links, Folder: ${comment.task.folder?.name || 'None'}`);
     });
 
-    res.json({ comments });
+    res.json({ 
+      comments,
+      taskInfo: { // NEW: Return task context
+        id: task.id,
+        title: task.title,
+        folder: task.folder
+      }
+    });
   } catch (error) {
     console.error("💥 Get comments error:", error);
     res.status(500).json({ message: error.message || "Internal server error" });
@@ -485,6 +565,12 @@ export const getComment = async (req, res) => {
         },
         task: {
           include: {
+            folder: { // NEW: Include folder
+              select: {
+                id: true,
+                name: true
+              }
+            },
             project: {
               include: {
                 workspace: {
@@ -520,7 +606,7 @@ export const getComment = async (req, res) => {
   }
 };
 
-// Get all comments for a project
+// Get all comments for a project - UPDATED: Include folder context
 export const getProjectComments = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -539,7 +625,13 @@ export const getProjectComments = async (req, res) => {
             members: true
           }
         },
-        members: true
+        members: true,
+        folders: { // NEW: Include folders for context
+          select: {
+            id: true,
+            name: true
+          }
+        }
       }
     });
 
@@ -587,16 +679,132 @@ export const getProjectComments = async (req, res) => {
           select: {
             id: true,
             title: true,
-            projectId: true
+            projectId: true,
+            folderId: true, // NEW: Include folder info
+            folder: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         }
       },
       orderBy: { createdAt: "desc" },
     });
 
-    res.json({ comments });
+    res.json({ 
+      comments,
+      projectInfo: { // NEW: Return project context
+        id: project.id,
+        name: project.name,
+        folders: project.folders
+      }
+    });
   } catch (error) {
     console.error("Get project comments error:", error);
+    res.status(500).json({ message: error.message || "Internal server error" });
+  }
+};
+
+// NEW: Get all comments for a specific folder
+export const getFolderComments = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { folderId } = req.params;
+
+    if (!folderId) {
+      return res.status(400).json({ message: "Folder ID is required." });
+    }
+
+    // Verify folder exists and user has access
+    const folder = await prisma.folder.findUnique({
+      where: { id: folderId },
+      include: {
+        project: {
+          include: {
+            workspace: {
+              include: {
+                members: true
+              }
+            },
+            members: true
+          }
+        }
+      }
+    });
+
+    if (!folder) {
+      return res.status(404).json({ message: "Folder not found." });
+    }
+
+    // Check if user has access to the project
+    const hasAccess = folder.project.members.some(member => member.userId === userId) ||
+                     folder.project.workspace.members.some(member => member.userId === userId);
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        message: "You don't have access to view comments for this folder.",
+      });
+    }
+
+    const comments = await prisma.comment.findMany({
+      where: {
+        task: {
+          folderId: folderId
+        }
+      },
+      include: { 
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true
+          }
+        },
+        links: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+        },
+        task: {
+          select: {
+            id: true,
+            title: true,
+            projectId: true,
+            folderId: true,
+            folder: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({ 
+      comments,
+      folderInfo: {
+        id: folder.id,
+        name: folder.name,
+        project: {
+          id: folder.project.id,
+          name: folder.project.name
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Get folder comments error:", error);
     res.status(500).json({ message: error.message || "Internal server error" });
   }
 };
@@ -611,12 +819,18 @@ export const deleteComment = async (req, res) => {
       return res.status(400).json({ message: "Comment ID is required." });
     }
 
-    // Find the comment
+    // Find the comment - UPDATED: Include folder info
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
       include: {
         task: {
           include: {
+            folder: { // NEW: Include folder
+              select: {
+                id: true,
+                name: true
+              }
+            },
             project: {
               include: {
                 workspace: {
@@ -653,7 +867,7 @@ export const deleteComment = async (req, res) => {
       where: { id: commentId }
     });
 
-    console.log(`✅ Comment deleted: ${commentId}`);
+    console.log(`✅ Comment deleted: ${commentId} from task ${comment.task.id} in folder ${comment.task.folder?.name || 'None'}`);
 
     res.json({ 
       message: "Comment deleted successfully." 

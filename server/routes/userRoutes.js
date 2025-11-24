@@ -1,3 +1,4 @@
+// src/routes/userRoutes.js
 import express from 'express';
 import prisma from '../configs/prisma.js';
 

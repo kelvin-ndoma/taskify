@@ -335,9 +335,6 @@ const syncWorkspaceMemberCreation = inngest.createFunction(
   }
 );
 
-// 🚫 REMOVED COMPLETELY: syncUserFromInvitation function
-// This function was creating fake users with @temp.com emails
-
 /* =========================================================
    🔹 INNGEST FUNCTION TO SEND EMAIL ON TASK CREATION
 ========================================================= */
@@ -348,7 +345,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
   async ({ event, step }) => {
     const { taskId, assigneeId, origin } = event.data;
     
-    // Fetch task with specific assignee
+    // Fetch task with specific assignee - UPDATED: Include folder info
     const task = await prisma.task.findUnique({
       where: { id: taskId },
       include: { 
@@ -372,6 +369,12 @@ const sendTaskAssignmentEmail = inngest.createFunction(
               }
             }
           }
+        },
+        folder: { // NEW: Include folder info
+          select: {
+            id: true,
+            name: true
+          }
         }
       }
     });
@@ -388,18 +391,22 @@ const sendTaskAssignmentEmail = inngest.createFunction(
 
     const assignment = task.assignees[0];
     
-    // Send assignment email
+    // NEW: Build folder context for email
+    const folderContext = task.folder ? ` in folder "${task.folder.name}"` : '';
+    
+    // Send assignment email - UPDATED: Include folder info
     await step.run('send-assignment-email', async () => {
       await sendEmail({
         to: assignment.user.email,
         subject: `New Task Assignment in ${task.project.name}`,
         body: `<div style="max-width: 600px;">
           <h2>Hi ${assignment.user.name},</h2>
-          <p style="font-size: 16px;">You've been assigned a new task in <strong>${task.project.workspace.name}</strong> → <strong>${task.project.name}</strong>:</p>
+          <p style="font-size: 16px;">You've been assigned a new task in <strong>${task.project.workspace.name}</strong> → <strong>${task.project.name}</strong>${folderContext}:</p>
           <p style="font-size: 18px; font-weight: bold; color: #007bff; margin: 8px 0;">${task.title}</p>
           <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
             <p style="margin: 6px 0;"><strong>Description:</strong> ${task.description || 'No description provided'}</p>
-            <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
+            ${task.folder ? `<p style="margin: 6px 0;"><strong>Folder:</strong> ${task.folder.name}</p>` : ''}
+            <p style="margin: 6px 0;"><strong>Due Date:</strong> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Not set'}</p>
             <p style="margin: 6px 0;"><strong>Priority:</strong> ${task.priority}</p>
             <p style="margin: 6px 0;"><strong>Status:</strong> ${task.status}</p>
             <p style="margin: 6px 0;"><strong>Type:</strong> ${task.type}</p>
@@ -412,14 +419,14 @@ const sendTaskAssignmentEmail = inngest.createFunction(
           </p>
         </div>`
       });
-      console.log(`✅ Assignment email sent to ${assignment.user.email} for task ${taskId}`);
+      console.log(`✅ Assignment email sent to ${assignment.user.email} for task ${taskId}${folderContext}`);
     });
 
     // Schedule reminder if due date is in the future
-    const dueDate = new Date(task.due_date);
+    const dueDate = task.due_date ? new Date(task.due_date) : null;
     const today = new Date();
     
-    if (dueDate > today) {
+    if (dueDate && dueDate > today) {
       // Sleep until due date
       await step.sleepUntil('wait-for-due-date', dueDate);
 
@@ -432,6 +439,11 @@ const sendTaskAssignmentEmail = inngest.createFunction(
             due_date: true,
             description: true,
             type: true,
+            folder: { // NEW: Include folder for reminder
+              select: {
+                name: true
+              }
+            },
             project: {
               include: {
                 workspace: {
@@ -449,17 +461,21 @@ const sendTaskAssignmentEmail = inngest.createFunction(
           return;
         }
 
-        // Send reminder email
+        // NEW: Build folder context for reminder
+        const reminderFolderContext = updatedTask.folder ? ` in folder "${updatedTask.folder.name}"` : '';
+
+        // Send reminder email - UPDATED: Include folder info
         await step.run('send-reminder-email', async () => {
           await sendEmail({
             to: assignment.user.email,
             subject: `Reminder: Task Due Today - ${updatedTask.project.name}`,
             body: `<div style="max-width: 600px;">
               <h2>Hi ${assignment.user.name},</h2>
-              <p style="font-size: 16px;">You have a task due today in <strong>${updatedTask.project.workspace.name}</strong> → <strong>${updatedTask.project.name}</strong>:</p>
+              <p style="font-size: 16px;">You have a task due today in <strong>${updatedTask.project.workspace.name}</strong> → <strong>${updatedTask.project.name}</strong>${reminderFolderContext}:</p>
               <p style="font-size: 18px; font-weight: bold; color: #dc3545; margin: 8px 0;">${updatedTask.title}</p>
               <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
                 <p style="margin: 6px 0;"><strong>Description:</strong> ${updatedTask.description || 'No description provided'}</p>
+                ${updatedTask.folder ? `<p style="margin: 6px 0;"><strong>Folder:</strong> ${updatedTask.folder.name}</p>` : ''}
                 <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(updatedTask.due_date).toLocaleDateString()} <strong>(TODAY)</strong></p>
                 <p style="margin: 6px 0;"><strong>Status:</strong> ${updatedTask.status}</p>
                 <p style="margin: 6px 0;"><strong>Type:</strong> ${updatedTask.type}</p>
@@ -472,7 +488,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
               </p>
             </div>`
           });
-          console.log(`✅ Reminder email sent to ${assignment.user.email} for task ${taskId}`);
+          console.log(`✅ Reminder email sent to ${assignment.user.email} for task ${taskId}${reminderFolderContext}`);
         });
       });
     }
@@ -492,7 +508,19 @@ const sendWorkspaceInvitationEmail = inngest.createFunction(
     try {
       const workspace = await prisma.workspace.findUnique({
         where: { id: workspaceId },
-        include: { owner: true },
+        include: { 
+          owner: true,
+          projects: { // NEW: Include projects for context
+            include: {
+              folders: { // NEW: Include folders for context
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          }
+        },
       });
 
       if (!workspace) {
@@ -532,6 +560,18 @@ const sendWorkspaceInvitationEmail = inngest.createFunction(
               <div>
                 <strong style="color: #333; display: block;">Your Role</strong>
                 <span style="color: #666; text-transform: capitalize;">${role.toLowerCase()}</span>
+              </div>
+            </div>
+            
+            <!-- NEW: Workspace stats -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #dee2e6;">
+              <div>
+                <strong style="color: #333; display: block;">Projects</strong>
+                <span style="color: #666;">${workspace.projects.length}</span>
+              </div>
+              <div>
+                <strong style="color: #333; display: block;">Active Tasks</strong>
+                <span style="color: #666;">${workspace.projects.reduce((acc, project) => acc + (project.folders?.length || 0), 0)} folders</span>
               </div>
             </div>
           </div>
@@ -593,6 +633,12 @@ const sendTaskStatusUpdateEmail = inngest.createFunction(
               }
             }
           }
+        },
+        folder: { // NEW: Include folder info
+          select: {
+            id: true,
+            name: true
+          }
         }
       }
     });
@@ -604,6 +650,9 @@ const sendTaskStatusUpdateEmail = inngest.createFunction(
       select: { name: true }
     });
 
+    // NEW: Build folder context
+    const folderContext = task.folder ? ` in folder "${task.folder.name}"` : '';
+
     for (const assignee of task.assignees) {
       await step.run(`send-status-update-email-${assignee.user.id}`, async () => {
         await sendEmail({
@@ -611,11 +660,12 @@ const sendTaskStatusUpdateEmail = inngest.createFunction(
           subject: `Task Status Updated: ${task.title}`,
           body: `<div style="max-width: 600px;">
             <h2>Hi ${assignee.user.name},</h2>
-            <p style="font-size: 16px;">The status of your task in <strong>${task.project.workspace.name}</strong> → <strong>${task.project.name}</strong> has been updated:</p>
+            <p style="font-size: 16px;">The status of your task in <strong>${task.project.workspace.name}</strong> → <strong>${task.project.name}</strong>${folderContext} has been updated:</p>
             <p style="font-size: 18px; font-weight: bold; color: #007bff; margin: 8px 0;">${task.title}</p>
             <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
               <p style="margin: 6px 0;"><strong>Status Changed:</strong> ${oldStatus} → <strong>${newStatus}</strong></p>
               <p style="margin: 6px 0;"><strong>Updated By:</strong> ${updater?.name || "Team Member"}</p>
+              ${task.folder ? `<p style="margin: 6px 0;"><strong>Folder:</strong> ${task.folder.name}</p>` : ''}
               <p style="margin: 6px 0;"><strong>Description:</strong> ${task.description || 'No description provided'}</p>
               <p style="margin: 6px 0;"><strong>Type:</strong> ${task.type}</p>
             </div>
@@ -627,7 +677,7 @@ const sendTaskStatusUpdateEmail = inngest.createFunction(
             </p>
           </div>`
         });
-        console.log(`✅ Status update email sent to ${assignee.user.email} for task ${taskId}`);
+        console.log(`✅ Status update email sent to ${assignee.user.email} for task ${taskId}${folderContext}`);
       });
     }
   }
@@ -637,7 +687,7 @@ const sendNewCommentEmail = inngest.createFunction(
   { id: "send-new-comment-mail" },
   { event: "app/task.comment.added" },
   async ({ event, step }) => {
-    const { taskId, commentId, commenterId, origin } = event.data;
+    const { taskId, commentId, commenterId, origin, taskFolder } = event.data; // UPDATED: Added taskFolder
     
     const task = await prisma.task.findUnique({
       where: { id: taskId },
@@ -661,6 +711,12 @@ const sendNewCommentEmail = inngest.createFunction(
               }
             }
           }
+        },
+        folder: { // NEW: Include folder info
+          select: {
+            id: true,
+            name: true
+          }
         }
       }
     });
@@ -678,6 +734,9 @@ const sendNewCommentEmail = inngest.createFunction(
 
     if (!task || !comment || task.assignees.length === 0) return;
 
+    // NEW: Build folder context (use provided taskFolder or fetch from task)
+    const folderContext = taskFolder || (task.folder ? ` in folder "${task.folder.name}"` : '');
+
     for (const assignee of task.assignees) {
       if (assignee.user.id !== commenterId) {
         await step.run(`send-comment-email-${assignee.user.id}`, async () => {
@@ -686,16 +745,17 @@ const sendNewCommentEmail = inngest.createFunction(
             subject: `New Comment on Task: ${task.title}`,
             body: `<div style="max-width: 600px;">
               <h2>Hi ${assignee.user.name},</h2>
-              <p style="font-size: 16px;">A new comment was added to your task in <strong>${task.project.workspace.name}</strong> → <strong>${task.project.name}</strong>:</p>
+              <p style="font-size: 16px;">A new comment was added to your task in <strong>${task.project.workspace.name}</strong> → <strong>${task.project.name}</strong>${folderContext}:</p>
               <p style="font-size: 18px; font-weight: bold; color: #007bff; margin: 8px 0;">${task.title}</p>
               <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px;">
                 <p style="margin: 6px 0 10px 0;"><strong>Comment by ${comment.user.name}:</strong></p>
                 <p style="margin: 0; font-style: italic; background: #f8f9fa; padding: 10px; border-radius: 4px;">${comment.content}</p>
               </div>
               <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px;">
+                ${task.folder ? `<p style="margin: 6px 0;"><strong>Folder:</strong> ${task.folder.name}</p>` : ''}
                 <p style="margin: 6px 0;"><strong>Task Status:</strong> ${task.status}</p>
                 <p style="margin: 6px 0;"><strong>Task Type:</strong> ${task.type}</p>
-                <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
+                <p style="margin: 6px 0;"><strong>Due Date:</strong> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Not set'}</p>
               </div>
               <a href="${origin}/taskDetails?projectId=${task.projectId}&taskId=${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
                 View Task & Reply
@@ -705,7 +765,7 @@ const sendNewCommentEmail = inngest.createFunction(
               </p>
             </div>`
           });
-          console.log(`✅ Comment notification sent to ${assignee.user.email} for task ${taskId}`);
+          console.log(`✅ Comment notification sent to ${assignee.user.email} for task ${taskId}${folderContext}`);
         });
       }
     }
@@ -724,7 +784,6 @@ export const functions = [
   syncWorkspaceUpdation,
   syncWorkspaceDeletion,
   syncWorkspaceMemberCreation,
-  // 🚫 REMOVED: syncUserFromInvitation - no more fake users
   sendTaskAssignmentEmail,
   sendWorkspaceInvitationEmail,
   sendTaskStatusUpdateEmail,

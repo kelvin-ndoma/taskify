@@ -6,7 +6,8 @@ import {
     updateTask, 
     deleteTasks,
     getTask,
-    getProjectTasks 
+    getProjectTasks,
+    getFolderTasks // NEW: Import folder tasks function
 } from '../controllers/taskController.js';
 
 const taskRouter = express.Router();
@@ -28,5 +29,8 @@ taskRouter.get('/:id', getTask);
 
 // ✅ Get all tasks for a project
 taskRouter.get('/project/:projectId', getProjectTasks);
+
+// ✅ Get all tasks for a folder - NEW
+taskRouter.get('/folder/:folderId', getFolderTasks);
 
 export default taskRouter;

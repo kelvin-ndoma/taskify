@@ -9,7 +9,10 @@ import {
   deleteProject,
   removeProjectMember,
   getProjectStats,
-  updateProjectProgress
+  updateProjectProgress,
+  createFolder, // NEW: Import folder functions
+  updateFolder,
+  deleteFolder
 } from '../controllers/projectController.js';
 
 const projectRouter = express.Router();
@@ -40,5 +43,16 @@ projectRouter.post('/:projectId/members', addProjectMember);
 
 // ✅ Remove member from project
 projectRouter.delete('/:projectId/members/:memberId', removeProjectMember);
+
+// ✅ FOLDER MANAGEMENT ROUTES - NEW
+
+// ✅ Create folder in project
+projectRouter.post('/:projectId/folders', createFolder);
+
+// ✅ Update folder
+projectRouter.put('/folders/:folderId', updateFolder);
+
+// ✅ Delete folder
+projectRouter.delete('/folders/:folderId', deleteFolder);
 
 export default projectRouter;
