@@ -7,15 +7,15 @@ import {
     deleteTasks,
     getTask,
     getProjectTasks,
-    getFolderTasks // NEW: Import folder tasks function
+    getFolderTasks // NEW: Get tasks by folder
 } from '../controllers/taskController.js';
 
 const taskRouter = express.Router();
 
-// ✅ Create a task
+// ✅ Create a task (can now include folderId)
 taskRouter.post('/', createTask);
 
-// ✅ Update a task by ID
+// ✅ Update a task by ID (can now update folderId and position)
 taskRouter.put('/:id', updateTask);
 
 // ✅ Delete a single task by ID
@@ -27,10 +27,10 @@ taskRouter.delete('/', deleteTasks);
 // ✅ Get a single task by ID
 taskRouter.get('/:id', getTask);
 
-// ✅ Get all tasks for a project
+// ✅ Get all tasks for a project (includes both folder tasks and root tasks)
 taskRouter.get('/project/:projectId', getProjectTasks);
 
-// ✅ Get all tasks for a folder - NEW
+// ✅ NEW: Get all tasks for a specific folder
 taskRouter.get('/folder/:folderId', getFolderTasks);
 
 export default taskRouter;

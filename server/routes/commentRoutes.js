@@ -1,4 +1,3 @@
-// src/routes/commentRoutes.js
 import express from 'express';
 import { 
   addComment, 
@@ -6,8 +5,7 @@ import {
   updateComment, 
   deleteComment,
   getComment,
-  getProjectComments,
-  getFolderComments // NEW: Import folder comments function
+  getProjectComments 
 } from '../controllers/commentController.js';
 
 const commentRouter = express.Router();
@@ -17,9 +15,6 @@ commentRouter.get('/task/:taskId', getTaskComments);
 
 // ✅ Get all comments for a project
 commentRouter.get('/project/:projectId', getProjectComments);
-
-// ✅ Get all comments for a folder - NEW
-commentRouter.get('/folder/:folderId', getFolderComments);
 
 // ✅ Get single comment by ID
 commentRouter.get('/:commentId', getComment);

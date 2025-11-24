@@ -10,7 +10,7 @@ export const createTask = async (req, res) => {
 
     const {
       projectId,
-      folderId, // NEW: Added folderId support
+      folderId, // NEW: Optional folder ID
       title,
       description,
       type = "GENERAL_TASK",
@@ -19,28 +19,12 @@ export const createTask = async (req, res) => {
       assignees = [],
       due_date,
       links = [], // Array of { url, title } objects for task links
-      position, // NEW: Added position for ordering
+      position, // NEW: Optional position for ordering
     } = req.body;
 
     // Validate required fields
     if (!projectId || !title) {
       return res.status(400).json({ message: "Project ID and title are required." });
-    }
-
-    // NEW: Validate folder belongs to project if provided
-    if (folderId) {
-      const folder = await prisma.folder.findUnique({
-        where: { id: folderId },
-        include: { project: true }
-      });
-      
-      if (!folder) {
-        return res.status(404).json({ message: "Folder not found." });
-      }
-      
-      if (folder.projectId !== projectId) {
-        return res.status(400).json({ message: "Folder does not belong to the specified project." });
-      }
     }
 
     // Validate enum values
@@ -77,13 +61,21 @@ export const createTask = async (req, res) => {
           },
         },
         folders: {
-          where: folderId ? { id: folderId } : undefined
-        }
+          where: folderId ? { id: folderId } : undefined,
+        },
       },
     });
 
     if (!project) {
       return res.status(404).json({ message: "Project not found." });
+    }
+
+    // NEW: Validate folder belongs to project if provided
+    if (folderId) {
+      const folderExists = project.folders.some(folder => folder.id === folderId);
+      if (!folderExists) {
+        return res.status(400).json({ message: "Folder does not belong to this project." });
+      }
     }
 
     // Check permissions
@@ -139,14 +131,14 @@ export const createTask = async (req, res) => {
       const task = await tx.task.create({
         data: {
           projectId,
-          folderId, // NEW: Include folderId
+          folderId: folderId || null, // NEW: Include folderId
           title,
           description,
           type,
           priority,
           status,
           due_date: due_date ? new Date(due_date) : null,
-          position: position !== undefined ? position : 0, // NEW: Include position
+          position: position || 0, // NEW: Include position
         },
       });
 
@@ -215,7 +207,7 @@ export const createTask = async (req, res) => {
               }
             },
           },
-          folder: { // NEW: Include folder details
+          folder: { // NEW: Include folder information
             select: {
               id: true,
               name: true,
@@ -309,10 +301,10 @@ export const updateTask = async (req, res) => {
               },
             },
             members: true,
-            folders: true
+            folders: true, // NEW: Include folders for validation
           },
         },
-        folder: true // NEW: Include folder
+        folder: true, // NEW: Include current folder
       },
     });
 
@@ -329,25 +321,9 @@ export const updateTask = async (req, res) => {
       assignees,
       due_date,
       links,
-      folderId, // NEW: Added folderId support
-      position, // NEW: Added position support
+      folderId, // NEW: Support folder updates
+      position, // NEW: Support position updates
     } = req.body;
-
-    // NEW: Validate folder belongs to project if provided
-    if (folderId && folderId !== task.folderId) {
-      const folder = await prisma.folder.findUnique({
-        where: { id: folderId },
-        include: { project: true }
-      });
-      
-      if (!folder) {
-        return res.status(404).json({ message: "Folder not found." });
-      }
-      
-      if (folder.projectId !== task.projectId) {
-        return res.status(400).json({ message: "Folder does not belong to the task's project." });
-      }
-    }
 
     // Validate enum values if provided
     const validTaskTypes = ["GENERAL_TASK", "WEEKLY_EMAILS", "CALENDARS", "CLIENT", "SOCIAL", "OTHER"];
@@ -370,6 +346,17 @@ export const updateTask = async (req, res) => {
       return res.status(400).json({ 
         message: `Invalid priority. Must be one of: ${validPriorities.join(", ")}` 
       });
+    }
+
+    // NEW: Validate folder belongs to project if provided
+    if (folderId !== undefined) {
+      if (folderId) {
+        const folderExists = task.project.folders.some(folder => folder.id === folderId);
+        if (!folderExists) {
+          return res.status(400).json({ message: "Folder does not belong to this project." });
+        }
+      }
+      // If folderId is null, it's valid (task moved to project root)
     }
 
     // Check permissions
@@ -423,6 +410,8 @@ export const updateTask = async (req, res) => {
 
     // Track if status changed for email notification
     const statusChanged = status && status !== task.status;
+    // Track if folder changed
+    const folderChanged = folderId !== undefined && folderId !== task.folderId;
 
     // Update task with transaction
     const updatedTask = await prisma.$transaction(async (tx) => {
@@ -537,7 +526,7 @@ export const updateTask = async (req, res) => {
               }
             },
           },
-          folder: { // NEW: Include folder details
+          folder: { // NEW: Include folder information
             select: {
               id: true,
               name: true,
@@ -608,7 +597,7 @@ export const updateTask = async (req, res) => {
   }
 };
 
-// Get task by ID - ENHANCED for better display
+// Get task by ID - ENHANCED for better display with folder support
 export const getTask = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -657,7 +646,7 @@ export const getTask = async (req, res) => {
             },
           },
         },
-        folder: { // NEW: Include folder details
+        folder: { // NEW: Include folder information
           select: {
             id: true,
             name: true,
@@ -727,7 +716,7 @@ export const getTask = async (req, res) => {
   }
 };
 
-// Get tasks by project - ENHANCED for better display
+// Get tasks by project - ENHANCED for better display with folder support
 export const getProjectTasks = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -746,52 +735,6 @@ export const getProjectTasks = async (req, res) => {
         members: {
           where: { userId },
         },
-        folders: { // NEW: Include folders
-          include: {
-            tasks: {
-              include: {
-                assignees: {
-                  include: {
-                    user: {
-                      select: {
-                        id: true,
-                        name: true,
-                        email: true,
-                        image: true,
-                      },
-                    },
-                  },
-                },
-                links: {
-                  include: {
-                    user: {
-                      select: {
-                        id: true,
-                        name: true,
-                        image: true,
-                      },
-                    },
-                  },
-                  orderBy: {
-                    createdAt: 'asc'
-                  }
-                },
-                _count: {
-                  select: {
-                    comments: true,
-                    assignees: true
-                  }
-                }
-              },
-              orderBy: {
-                position: 'asc' // NEW: Order tasks by position within folders
-              }
-            }
-          },
-          orderBy: {
-            position: 'asc' // NEW: Order folders by position
-          }
-        }
       },
     });
 
@@ -809,12 +752,117 @@ export const getProjectTasks = async (req, res) => {
       });
     }
 
-    // Get tasks not in any folder (legacy tasks)
-    const tasksWithoutFolders = await prisma.task.findMany({
-      where: { 
-        projectId,
-        folderId: null 
+    const tasks = await prisma.task.findMany({
+      where: { projectId },
+      include: {
+        assignees: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        links: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc'
+          }
+        },
+        folder: { // NEW: Include folder information
+          select: {
+            id: true,
+            name: true,
+            description: true
+          }
+        },
+        comments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+        },
+        // FIXED: Include counts for better display
+        _count: {
+          select: {
+            comments: true,
+            assignees: true
+          }
+        }
       },
+      orderBy: [
+        { folderId: 'asc' }, // NEW: Group by folder first
+        { position: 'asc' }, // NEW: Then by position within folder
+        { createdAt: "desc" }, // Fallback to creation date
+      ],
+    });
+
+    res.json({ tasks });
+  } catch (error) {
+    console.error("❌ Error fetching project tasks:", error);
+    res.status(500).json({ message: error.code || error.message });
+  }
+};
+
+// NEW: Get tasks by folder
+export const getFolderTasks = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { folderId } = req.params;
+
+    const folder = await prisma.folder.findUnique({
+      where: { id: folderId },
+      include: {
+        project: {
+          include: {
+            workspace: {
+              include: {
+                members: {
+                  where: { userId },
+                },
+              },
+            },
+            members: {
+              where: { userId },
+            },
+          },
+        },
+      },
+    });
+
+    if (!folder) {
+      return res.status(404).json({ message: "Folder not found." });
+    }
+
+    // Check if user has access to this folder's project
+    const hasWorkspaceAccess = folder.project.workspace.members.length > 0;
+    const hasProjectAccess = folder.project.members.length > 0;
+
+    if (!hasWorkspaceAccess && !hasProjectAccess) {
+      return res.status(403).json({
+        message: "You don't have access to this folder's tasks.",
+      });
+    }
+
+    const tasks = await prisma.task.findMany({
+      where: { folderId },
       include: {
         assignees: {
           include: {
@@ -860,117 +908,18 @@ export const getProjectTasks = async (req, res) => {
           }
         }
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [
+        { position: 'asc' }, // Order by position within folder
+        { createdAt: "desc" },
+      ],
     });
 
     res.json({ 
-      tasks: tasksWithoutFolders,
-      folders: project.folders // NEW: Return folders with their tasks
-    });
-  } catch (error) {
-    console.error("❌ Error fetching project tasks:", error);
-    res.status(500).json({ message: error.code || error.message });
-  }
-};
-
-// NEW: Get tasks by folder
-export const getFolderTasks = async (req, res) => {
-  try {
-    const { userId } = await req.auth();
-    const { folderId } = req.params;
-
-    const folder = await prisma.folder.findUnique({
-      where: { id: folderId },
-      include: {
-        project: {
-          include: {
-            workspace: {
-              include: {
-                members: {
-                  where: { userId },
-                },
-              },
-            },
-            members: {
-              where: { userId },
-            },
-          },
-        },
-        tasks: {
-          include: {
-            assignees: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    image: true,
-                  },
-                },
-              },
-            },
-            links: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    image: true,
-                  },
-                },
-              },
-              orderBy: {
-                createdAt: 'asc'
-              }
-            },
-            comments: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    image: true,
-                  },
-                },
-              },
-            },
-            _count: {
-              select: {
-                comments: true,
-                assignees: true
-              }
-            }
-          },
-          orderBy: {
-            position: 'asc' // Order tasks by position within folder
-          }
-        }
-      },
-    });
-
-    if (!folder) {
-      return res.status(404).json({ message: "Folder not found." });
-    }
-
-    // Check if user has access to this folder's project
-    const hasWorkspaceAccess = folder.project.workspace.members.length > 0;
-    const hasProjectAccess = folder.project.members.length > 0;
-
-    if (!hasWorkspaceAccess && !hasProjectAccess) {
-      return res.status(403).json({
-        message: "You don't have access to this folder's tasks.",
-      });
-    }
-
-    res.json({ 
+      tasks,
       folder: {
         id: folder.id,
         name: folder.name,
-        description: folder.description,
-        tasks: folder.tasks
+        description: folder.description
       }
     });
   } catch (error) {
@@ -997,7 +946,6 @@ export const deleteTask = async (req, res) => {
             },
           },
         },
-        folder: true // NEW: Include folder
       },
     });
 

@@ -93,15 +93,7 @@ export const addMember = async (req, res) => {
     // Check if workspace exists
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
-      include: { 
-        members: true, 
-        owner: true,
-        projects: {
-          include: {
-            folders: true
-          }
-        }
-      },
+      include: { members: true, owner: true },
     });
     
     if (!workspace) {
@@ -231,15 +223,6 @@ export const removeMember = async (req, res) => {
           },
         },
         owner: { select: { id: true, name: true, email: true } },
-        projects: {
-          include: {
-            folders: {
-              include: {
-                tasks: true
-              }
-            }
-          }
-        }
       },
     });
     if (!workspace) {
@@ -278,22 +261,10 @@ export const removeMember = async (req, res) => {
     // Remove member from all projects in workspace
     const projects = await prisma.project.findMany({
       where: { workspaceId },
-      include: { 
-        members: true,
-        folders: {
-          include: {
-            tasks: {
-              include: {
-                assignees: true
-              }
-            }
-          }
-        }
-      },
+      include: { members: true },
     });
 
     for (const project of projects) {
-      // Remove from project members
       const projectMembership = project.members.find((m) => m.userId === userId);
       if (projectMembership) {
         await prisma.projectMember.delete({
@@ -305,31 +276,11 @@ export const removeMember = async (req, res) => {
           },
         });
       }
-
-      // Remove from task assignments in project folders
-      for (const folder of project.folders) {
-        for (const task of folder.tasks) {
-          const taskAssignment = task.assignees.find((a) => a.userId === userId);
-          if (taskAssignment) {
-            await prisma.taskAssignee.delete({
-              where: {
-                taskId_userId: {
-                  taskId: task.id,
-                  userId,
-                },
-              },
-            });
-          }
-        }
-      }
     }
 
-    // Remove user from task assignments in workspace (tasks without folders)
+    // Remove user from task assignments in workspace
     const tasks = await prisma.task.findMany({
-      where: { 
-        project: { workspaceId },
-        folderId: null 
-      },
+      where: { project: { workspaceId } },
       include: { assignees: true },
     });
 
@@ -384,14 +335,7 @@ export const deleteWorkspace = async (req, res) => {
     const { workspaceId } = req.params;
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
-      include: { 
-        members: true,
-        projects: {
-          include: {
-            folders: true
-          }
-        }
-      },
+      include: { members: true },
     });
     if (!workspace) return res.status(404).json({ message: "Workspace not found" });
 
@@ -427,16 +371,7 @@ export const updateWorkspace = async (req, res) => {
     }
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
-      include: { 
-        members: true,
-        projects: {
-          include: {
-            folders: {
-              orderBy: { position: 'asc' }
-            }
-          }
-        }
-      },
+      include: { members: true },
     });
     if (!workspace) {
       return res.status(404).json({ message: "Workspace not found" });
@@ -466,13 +401,6 @@ export const updateWorkspace = async (req, res) => {
         owner: {
           select: { id: true, name: true, email: true },
         },
-        projects: {
-          include: {
-            folders: {
-              orderBy: { position: 'asc' }
-            }
-          }
-        }
       },
     });
     res.json({
@@ -585,15 +513,7 @@ export const updateMemberRole = async (req, res) => {
 
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
-      include: { 
-        members: true, 
-        owner: true,
-        projects: {
-          include: {
-            folders: true
-          }
-        }
-      },
+      include: { members: true, owner: true },
     });
 
     if (!workspace) {
@@ -643,6 +563,7 @@ export const updateMemberRole = async (req, res) => {
 };
 
 // Ensure user's membership in default workspace (never creates fake user)
+// In workspaceController.js - FIX the ensureDefaultWorkspace function
 export const ensureDefaultWorkspace = async (userId) => {
   try {
     console.log('🔍 ensureDefaultWorkspace - Starting for user:', userId);
@@ -663,13 +584,6 @@ export const ensureDefaultWorkspace = async (userId) => {
           { name: "The Burns Brothers" },
         ],
       },
-      include: {
-        projects: {
-          include: {
-            folders: true
-          }
-        }
-      }
     });
 
     console.log('🔍 ensureDefaultWorkspace - Workspace lookup result:', {
