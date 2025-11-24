@@ -50,15 +50,15 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
                 }
             );
 
-            // 🆕 Fix: Correct property name and navigate to project detail
-            dispatch(addProject(data.project)); // Fixed: data.projct → data.project
+            // ✅ Project creation includes folders array from backend
+            dispatch(addProject(data.project));
             
-            // 🆕 Navigate to the new project
+            // Navigate to the new project
             navigate(`/projectsDetail?id=${data.project.id}&tab=tasks`);
             
             setIsDialogOpen(false);
             
-            // 🆕 Reset form
+            // Reset form
             setFormData({
                 name: "",
                 description: "",
@@ -97,7 +97,7 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
         }
     };
 
-    // 🆕 Reset form when dialog closes
+    // Reset form when dialog closes
     const handleClose = () => {
         setIsDialogOpen(false);
         setFormData({

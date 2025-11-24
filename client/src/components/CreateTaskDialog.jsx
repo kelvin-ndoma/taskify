@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Calendar as CalendarIcon, XIcon, Users, LinkIcon, PlusIcon, PaperclipIcon } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Calendar as CalendarIcon, XIcon, Users, LinkIcon, PlusIcon, PaperclipIcon, FolderIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { format } from "date-fns";
 import { useAuth } from "@clerk/clerk-react";
@@ -7,14 +7,14 @@ import api from "../configs/api";
 import toast from "react-hot-toast";
 import { addTask } from "../features/workspaceSlice";
 
-export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, projectId }) {
-
+export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, projectId, folderId }) {
     const { getToken } = useAuth();
     const dispatch = useDispatch();
 
     const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace || null);
     const project = currentWorkspace?.projects.find((p) => p.id === projectId);
     const teamMembers = project?.members || [];
+    const folders = project?.folders || [];
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
@@ -25,6 +25,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         priority: "MEDIUM",
         assignees: [],
         due_date: "",
+        folderId: folderId || "", // NEW: Folder support with prop
     });
 
     // 🆕 NEW: State for task links (url + title)
@@ -32,6 +33,16 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
     const [showLinkInput, setShowLinkInput] = useState(false);
     const [linkUrl, setLinkUrl] = useState("");
     const [linkTitle, setLinkTitle] = useState("");
+
+    // 🆕 Reset form when props change
+    useEffect(() => {
+        if (showCreateTask) {
+            setFormData(prev => ({
+                ...prev,
+                folderId: folderId || ""
+            }));
+        }
+    }, [showCreateTask, folderId]);
 
     // 🆕 Add assignee to the array
     const addAssignee = (userId) => {
@@ -194,6 +205,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                 priority: "MEDIUM",
                 assignees: [],
                 due_date: "",
+                folderId: folderId || "",
             });
             // 🆕 NEW: Reset links state
             setTaskLinks([]);
@@ -222,6 +234,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
             priority: "MEDIUM",
             assignees: [],
             due_date: "",
+            folderId: folderId || "",
         });
         // 🆕 NEW: Reset links state
         setTaskLinks([]);
@@ -263,6 +276,33 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
                             className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                         />
                     </div>
+
+                    {/* 🆕 NEW: Folder Selection */}
+                    {folders.length > 0 && (
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <FolderIcon className="size-4" />
+                                Folder (Optional)
+                            </label>
+                            <select 
+                                value={formData.folderId} 
+                                onChange={(e) => setFormData({ ...formData, folderId: e.target.value })} 
+                                className="w-full rounded dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                            >
+                                <option value="">No Folder (Root Level)</option>
+                                {folders.map((folder) => (
+                                    <option key={folder.id} value={folder.id}>
+                                        {folder.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {folderId && (
+                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                    Currently in folder: {folders.find(f => f.id === folderId)?.name}
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     {/* 🆕 NEW: Task Links Section */}
                     <div className="space-y-2">
