@@ -1,8 +1,8 @@
-// TaskDetails.jsx - UPDATED VERSION
+// TaskDetails.jsx - COMPLETE OPTIMIZED VERSION
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { useSelector, useDispatch } from "react-redux";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ExternalLinkIcon } from "lucide-react";
 import { useAuth, useUser } from "@clerk/clerk-react";
@@ -26,7 +26,8 @@ const TaskDetails = () => {
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [commentLoading, setCommentLoading] = useState(false);
-  const [commentsLoading, setCommentsLoading] = useState(false); // NEW: Separate loading state for comments
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [lastCommentUpdate, setLastCommentUpdate] = useState(null);
   
   // Editing states
   const [isEditingTask, setIsEditingTask] = useState(false);
@@ -60,15 +61,19 @@ const TaskDetails = () => {
     return isWorkspaceAdmin || isProjectLead || isTaskAssignee;
   };
 
-  // API functions
-  const fetchComments = async () => {
+  // Smart comment fetching with optimized updates
+  const fetchComments = useCallback(async (silent = false) => {
     if (!taskId) return;
+    
     try {
-      setCommentsLoading(true); // NEW: Set loading state
+      if (!silent) {
+        setCommentsLoading(true);
+      }
+      
       const token = await getToken();
       if (!token) {
         console.warn("No valid token available for fetching comments.");
-        setCommentsLoading(false);
+        if (!silent) setCommentsLoading(false);
         return;
       }
 
@@ -77,24 +82,47 @@ const TaskDetails = () => {
       });
 
       if (data?.comments) {
-        console.log("📥 Fetched comments:", data.comments);
-        // NEW: Normalize comments data
         const normalizedComments = data.comments.map(comment => ({
           ...comment,
           links: Array.isArray(comment.links) ? comment.links : [],
           user: comment.user || { id: 'unknown', name: 'Unknown User' }
         }));
-        setComments(normalizedComments);
+
+        // Smart update: Only update state if comments actually changed
+        const currentCommentIds = new Set(comments.map(c => c.id));
+        const newCommentIds = new Set(normalizedComments.map(c => c.id));
+        
+        const hasNewComments = normalizedComments.length !== comments.length || 
+                             !normalizedComments.every(comment => currentCommentIds.has(comment.id));
+        
+        if (hasNewComments) {
+          console.log("🔄 New comments detected, updating...");
+          setComments(normalizedComments);
+          setLastCommentUpdate(new Date());
+          
+          // Show subtle notification for new comments (only if user isn't actively typing)
+          if (silent && newCommentIds.size > currentCommentIds.size && !newComment.trim()) {
+            const newCount = normalizedComments.length - comments.length;
+            toast.success(`${newCount} new comment${newCount > 1 ? 's' : ''}`, {
+              duration: 2000,
+              position: 'bottom-right'
+            });
+          }
+        } else if (!silent) {
+          console.log("✅ Comments are up to date");
+        }
       }
     } catch (error) {
       console.error("Failed to fetch comments:", error.response?.data || error.message);
-      if (error.response?.status !== 404) {
+      if (!silent && error.response?.status !== 404) {
         toast.error("Could not load comments.");
       }
     } finally {
-      setCommentsLoading(false); // NEW: Clear loading state
+      if (!silent) {
+        setCommentsLoading(false);
+      }
     }
-  };
+  }, [taskId, comments, newComment, getToken]);
 
   const fetchTaskDetails = async () => {
     setLoading(true);
@@ -118,7 +146,7 @@ const TaskDetails = () => {
           assignees: Array.isArray(data.task.assignees) 
             ? data.task.assignees.filter(assignee => assignee?.user != null)
             : [],
-          links: Array.isArray(data.task.links) ? data.task.links : [] // NEW: Ensure links array
+          links: Array.isArray(data.task.links) ? data.task.links : []
         };
         
         setTask(safeTask);
@@ -170,7 +198,7 @@ const TaskDetails = () => {
           assignees: Array.isArray(tsk.assignees) 
             ? tsk.assignees.filter(assignee => assignee?.user != null)
             : [],
-          links: Array.isArray(tsk.links) ? tsk.links : [] // NEW: Ensure links array
+          links: Array.isArray(tsk.links) ? tsk.links : []
         };
 
         setTask(safeTask);
@@ -211,7 +239,7 @@ const TaskDetails = () => {
         assignees: Array.isArray(tsk.assignees) 
           ? tsk.assignees.filter(assignee => assignee?.user != null)
           : [],
-        links: Array.isArray(tsk.links) ? tsk.links : [] // NEW: Ensure links array
+        links: Array.isArray(tsk.links) ? tsk.links : []
       };
 
       setTask(safeTask);
@@ -256,7 +284,7 @@ const TaskDetails = () => {
         assignees: Array.isArray(data.task.assignees) 
           ? data.task.assignees.filter(assignee => assignee?.user != null)
           : [],
-        links: Array.isArray(data.task.links) ? data.task.links : [] // NEW: Ensure links array
+        links: Array.isArray(data.task.links) ? data.task.links : []
       };
 
       setTask(safeTask);
@@ -297,7 +325,7 @@ const TaskDetails = () => {
         assignees: Array.isArray(data.task.assignees) 
           ? data.task.assignees.filter(assignee => assignee?.user != null)
           : [],
-        links: Array.isArray(data.task.links) ? data.task.links : [] // NEW: Ensure links array
+        links: Array.isArray(data.task.links) ? data.task.links : []
       };
 
       setTask(safeTask);
@@ -337,7 +365,7 @@ const TaskDetails = () => {
         assignees: Array.isArray(data.task.assignees) 
           ? data.task.assignees.filter(assignee => assignee?.user != null)
           : [],
-        links: Array.isArray(data.task.links) ? data.task.links : [] // NEW: Ensure links array
+        links: Array.isArray(data.task.links) ? data.task.links : []
       };
 
       setTask(safeTask);
@@ -566,20 +594,44 @@ const TaskDetails = () => {
     setCommentLinkUrl(e.target.value);
   };
 
-  // useEffect hooks
+  // Smart comment polling with tab visibility detection
+  useEffect(() => {
+    if (!taskId) return;
+    
+    // Initial load
+    fetchComments(false);
+    
+    // Smart polling: Only poll if the tab is visible and user is active
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log("📱 Tab hidden, pausing comment updates");
+      } else {
+        console.log("📱 Tab visible, resuming comment updates");
+        fetchComments(true); // Silent update when tab becomes visible
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Smart interval: Only fetch if tab is visible
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchComments(true); // Silent background update
+      }
+    }, 45000); // Increased to 45 seconds for better UX
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [taskId, fetchComments]);
+
+  // Task details effect
   useEffect(() => {
     fetchTaskDetails();
   }, [taskId, projectId, currentWorkspace]);
 
-  useEffect(() => {
-    if (!taskId) return;
-    
-    fetchComments();
-    const interval = setInterval(fetchComments, 30000);
-    
-    return () => clearInterval(interval);
-  }, [taskId]);
-
+  // Debug effect for task data
   useEffect(() => {
     if (task) {
       console.log("🔍 Current task data:", task);
@@ -611,7 +663,7 @@ const TaskDetails = () => {
         showCommentLinkInput={showCommentLinkInput}
         commentLinkUrl={commentLinkUrl}
         commentLoading={commentLoading}
-        commentsLoading={commentsLoading} // NEW: Pass loading state
+        commentsLoading={commentsLoading}
         editingCommentId={editingCommentId}
         editingCommentContent={editingCommentContent}
         onCommentChange={handleCommentChange}
@@ -626,6 +678,8 @@ const TaskDetails = () => {
         onLinkUrlChange={handleLinkUrlChange}
         onAddCommentLink={addCommentLink}
         onRemoveCommentLink={removeCommentLink}
+        onRefreshComments={fetchComments}
+        lastUpdate={lastCommentUpdate}
       />
 
       <TaskInfoPanel
