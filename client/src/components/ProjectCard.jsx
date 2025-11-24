@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Folder, FileText, Users } from "lucide-react";
+import { FolderIcon } from "lucide-react"; // NEW
 
 const statusColors = {
     PLANNING: "bg-gray-200 dark:bg-zinc-600 text-gray-900 dark:text-zinc-200",
@@ -9,27 +9,12 @@ const statusColors = {
     CANCELLED: "bg-red-200 dark:bg-red-500 text-red-900 dark:text-red-900",
 };
 
-const ProjectCard = ({ project, stats }) => {
-    // Calculate task statistics including folders
-    const calculateTaskStats = () => {
-        if (stats) {
-            return stats; // Use passed stats if available
-        }
-        
-        // Fallback calculation
-        const folderTasks = project.folders?.flatMap(folder => folder.tasks || []) || [];
-        const rootTasks = project.tasks || [];
-        const allTasks = [...rootTasks, ...folderTasks];
-        
-        return {
-            totalTasks: allTasks.length,
-            totalFolders: project.folders?.length || 0,
-            completedTasks: allTasks.filter(task => task.status === 'DONE').length,
-            teamMembers: project.members?.length || 0,
-        };
-    };
-
-    const taskStats = calculateTaskStats();
+const ProjectCard = ({ project }) => {
+    // Calculate total tasks including folder tasks
+    const totalTasks = (project.tasks?.length || 0) + 
+                      (project.folders?.reduce((total, folder) => total + (folder.tasks?.length || 0), 0) || 0);
+    
+    const folderCount = project.folders?.length || 0;
 
     return (
         <Link to={`/projectsDetail?id=${project.id}&tab=tasks`} className="bg-white dark:bg-zinc-950 dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-gray-200 dark:border-zinc-800 hover:border-gray-300 dark:hover:border-zinc-700 rounded-lg p-5 transition-all duration-200 group">
@@ -54,37 +39,6 @@ const ProjectCard = ({ project, stats }) => {
                 </span>
             </div>
 
-            {/* NEW: Project Statistics with Folders */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-xs text-gray-500 dark:text-zinc-400 mb-1">
-                        <FileText className="size-3" />
-                        Tasks
-                    </div>
-                    <div className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
-                        {taskStats.totalTasks}
-                    </div>
-                </div>
-                <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-xs text-gray-500 dark:text-zinc-400 mb-1">
-                        <Folder className="size-3" />
-                        Folders
-                    </div>
-                    <div className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
-                        {taskStats.totalFolders}
-                    </div>
-                </div>
-                <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-xs text-gray-500 dark:text-zinc-400 mb-1">
-                        <Users className="size-3" />
-                        Team
-                    </div>
-                    <div className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
-                        {taskStats.teamMembers}
-                    </div>
-                </div>
-            </div>
-
             {/* Progress */}
             <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -92,20 +46,23 @@ const ProjectCard = ({ project, stats }) => {
                     <span className="text-gray-400 dark:text-zinc-400">{project.progress || 0}%</span>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-zinc-800 h-1.5 rounded">
-                    <div 
-                        className="h-1.5 rounded bg-blue-500 transition-all duration-300" 
-                        style={{ width: `${project.progress || 0}%` }} 
-                    />
+                    <div className="h-1.5 rounded bg-blue-500" style={{ width: `${project.progress || 0}%` }} />
                 </div>
             </div>
 
-            {/* NEW: Completion Rate */}
-            {taskStats.totalTasks > 0 && (
-                <div className="mt-2 text-xs text-gray-500 dark:text-zinc-400">
-                    {taskStats.completedTasks} of {taskStats.totalTasks} tasks completed
-                    ({Math.round((taskStats.completedTasks / taskStats.totalTasks) * 100)}%)
+            {/* NEW: Project Stats */}
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-zinc-700">
+                <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-zinc-400">
+                    <span className="flex items-center gap-1">
+                        <FolderIcon className="size-3" />
+                        {folderCount} folder{folderCount !== 1 ? 's' : ''}
+                    </span>
+                    <span>•</span>
+                    <span>{totalTasks} task{totalTasks !== 1 ? 's' : ''}</span>
+                    <span>•</span>
+                    <span>{project.members?.length || 0} member{project.members?.length !== 1 ? 's' : ''}</span>
                 </div>
-            )}
+            </div>
         </Link>
     );
 };

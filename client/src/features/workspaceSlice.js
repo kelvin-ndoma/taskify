@@ -77,22 +77,129 @@ const workspaceSlice = createSlice({
             state.workspaces = state.workspaces.filter((w) => w.id !== action.payload);
         },
         addProject: (state, action) => {
-            state.currentWorkspace.projects.push(action.payload);
+            // Ensure project has folders array
+            const projectWithFolders = {
+                ...action.payload,
+                folders: action.payload.folders || [] // NEW
+            };
+            
+            state.currentWorkspace.projects.push(projectWithFolders);
             state.workspaces = state.workspaces.map((w) =>
-                w.id === state.currentWorkspace.id ? { ...w, projects: w.projects.concat(action.payload) } : w
+                w.id === state.currentWorkspace.id ? { 
+                    ...w, 
+                    projects: w.projects.concat(projectWithFolders) 
+                } : w
+            );
+        },
+        updateProject: (state, action) => {
+            state.currentWorkspace.projects = state.currentWorkspace.projects.map((p) =>
+                p.id === action.payload.id ? action.payload : p
+            );
+            state.workspaces = state.workspaces.map((w) =>
+                w.id === state.currentWorkspace.id ? {
+                    ...w,
+                    projects: w.projects.map((p) =>
+                        p.id === action.payload.id ? action.payload : p
+                    )
+                } : w
+            );
+        },
+        // NEW: Folder management reducers
+        addFolder: (state, action) => {
+            state.currentWorkspace.projects = state.currentWorkspace.projects.map((p) => {
+                if (p.id === action.payload.projectId) {
+                    p.folders = p.folders ? [...p.folders, action.payload] : [action.payload];
+                }
+                return p;
+            });
+            state.workspaces = state.workspaces.map((w) =>
+                w.id === state.currentWorkspace.id ? {
+                    ...w,
+                    projects: w.projects.map((p) =>
+                        p.id === action.payload.projectId ? {
+                            ...p,
+                            folders: p.folders ? [...p.folders, action.payload] : [action.payload]
+                        } : p
+                    )
+                } : w
+            );
+        },
+        updateFolder: (state, action) => {
+            state.currentWorkspace.projects = state.currentWorkspace.projects.map((p) => {
+                if (p.id === action.payload.projectId) {
+                    p.folders = p.folders.map((f) =>
+                        f.id === action.payload.id ? action.payload : f
+                    );
+                }
+                return p;
+            });
+            state.workspaces = state.workspaces.map((w) =>
+                w.id === state.currentWorkspace.id ? {
+                    ...w,
+                    projects: w.projects.map((p) =>
+                        p.id === action.payload.projectId ? {
+                            ...p,
+                            folders: p.folders.map((f) =>
+                                f.id === action.payload.id ? action.payload : f
+                            )
+                        } : p
+                    )
+                } : w
+            );
+        },
+        deleteFolder: (state, action) => {
+            state.currentWorkspace.projects = state.currentWorkspace.projects.map((p) => {
+                if (p.id === action.payload.projectId) {
+                    p.folders = p.folders.filter((f) => f.id !== action.payload.folderId);
+                }
+                return p;
+            });
+            state.workspaces = state.workspaces.map((w) =>
+                w.id === state.currentWorkspace.id ? {
+                    ...w,
+                    projects: w.projects.map((p) =>
+                        p.id === action.payload.projectId ? {
+                            ...p,
+                            folders: p.folders.filter((f) => f.id !== action.payload.folderId)
+                        } : p
+                    )
+                } : w
             );
         },
         addTask: (state, action) => {
             state.currentWorkspace.projects = state.currentWorkspace.projects.map((p) => {
                 if (p.id === action.payload.projectId) {
-                    p.tasks.push(action.payload);
+                    // If task has a folder, add it to the folder's tasks
+                    if (action.payload.folderId) {
+                        p.folders = p.folders.map((folder) => {
+                            if (folder.id === action.payload.folderId) {
+                                folder.tasks = folder.tasks ? [...folder.tasks, action.payload] : [action.payload];
+                            }
+                            return folder;
+                        });
+                    } else {
+                        // Otherwise add to project root tasks
+                        p.tasks.push(action.payload);
+                    }
                 }
                 return p;
             });
             state.workspaces = state.workspaces.map((w) =>
                 w.id === state.currentWorkspace.id ? {
                     ...w, projects: w.projects.map((p) =>
-                        p.id === action.payload.projectId ? { ...p, tasks: p.tasks.concat(action.payload) } : p
+                        p.id === action.payload.projectId ? {
+                            ...p,
+                            tasks: action.payload.folderId ? p.tasks : [...p.tasks, action.payload],
+                            folders: p.folders.map((folder) => {
+                                if (folder.id === action.payload.folderId) {
+                                    return {
+                                        ...folder,
+                                        tasks: folder.tasks ? [...folder.tasks, action.payload] : [action.payload]
+                                    };
+                                }
+                                return folder;
+                            })
+                        } : p
                     )
                 } : w
             );
@@ -100,18 +207,34 @@ const workspaceSlice = createSlice({
         updateTask: (state, action) => {
             state.currentWorkspace.projects.map((p) => {
                 if (p.id === action.payload.projectId) {
+                    // Update task in project root if it exists there
                     p.tasks = p.tasks.map((t) =>
                         t.id === action.payload.id ? action.payload : t
                     );
+                    
+                    // Update task in folders if it exists there
+                    p.folders = p.folders.map((folder) => ({
+                        ...folder,
+                        tasks: folder.tasks ? folder.tasks.map((t) =>
+                            t.id === action.payload.id ? action.payload : t
+                        ) : []
+                    }));
                 }
             });
             state.workspaces = state.workspaces.map((w) =>
                 w.id === state.currentWorkspace.id ? {
                     ...w, projects: w.projects.map((p) =>
                         p.id === action.payload.projectId ? {
-                            ...p, tasks: p.tasks.map((t) =>
+                            ...p,
+                            tasks: p.tasks.map((t) =>
                                 t.id === action.payload.id ? action.payload : t
-                            )
+                            ),
+                            folders: p.folders.map((folder) => ({
+                                ...folder,
+                                tasks: folder.tasks ? folder.tasks.map((t) =>
+                                    t.id === action.payload.id ? action.payload : t
+                                ) : []
+                            }))
                         } : p
                     )
                 } : w
@@ -120,13 +243,22 @@ const workspaceSlice = createSlice({
         deleteTask: (state, action) => {
             state.currentWorkspace.projects.map((p) => {
                 p.tasks = p.tasks.filter((t) => !action.payload.includes(t.id));
+                p.folders = p.folders.map((folder) => ({
+                    ...folder,
+                    tasks: folder.tasks ? folder.tasks.filter((t) => !action.payload.includes(t.id)) : []
+                }));
                 return p;
             });
             state.workspaces = state.workspaces.map((w) =>
                 w.id === state.currentWorkspace.id ? {
                     ...w, projects: w.projects.map((p) =>
                         p.id === action.payload.projectId ? {
-                            ...p, tasks: p.tasks.filter((t) => !action.payload.includes(t.id))
+                            ...p,
+                            tasks: p.tasks.filter((t) => !action.payload.includes(t.id)),
+                            folders: p.folders.map((folder) => ({
+                                ...folder,
+                                tasks: folder.tasks ? folder.tasks.filter((t) => !action.payload.includes(t.id)) : []
+                            }))
                         } : p
                     )
                 } : w
@@ -193,6 +325,10 @@ export const {
     updateWorkspace, 
     deleteWorkspace, 
     addProject, 
+    updateProject, // NEW
+    addFolder, // NEW
+    updateFolder, // NEW
+    deleteFolder, // NEW
     addTask, 
     updateTask, 
     deleteTask,
