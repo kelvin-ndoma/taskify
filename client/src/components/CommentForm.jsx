@@ -1,8 +1,9 @@
-// components/CommentForm.jsx
+// components/CommentForm.jsx - ALTERNATIVE ROBUST VERSION
 import { PaperclipIcon, PlusIcon, LinkIcon, XIcon } from "lucide-react";
 import toast from "react-hot-toast";
+import { memo, useState, useCallback } from "react";
 
-const CommentForm = ({ 
+const CommentForm = memo(({ 
   newComment,
   onCommentChange,
   onKeyPress,
@@ -16,22 +17,71 @@ const CommentForm = ({
   onRemoveCommentLink,
   commentLoading
 }) => {
-  const handleSubmit = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Robust form submission handler
+  const handleSubmit = useCallback(async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Prevent multiple simultaneous submissions
+    if (isSubmitting || commentLoading) {
+      console.log("⏳ Already submitting, skipping...");
+      return;
+    }
+
+    if (!newComment.trim() && commentLinks.length === 0) {
+      toast.error("Comment cannot be empty");
+      return;
+    }
+
     if (typeof onAddComment !== 'function') {
-      console.error('onAddComment is not a function:', onAddComment);
+      console.error('onAddComment is not a function');
       toast.error('Cannot submit comment - form error');
       return;
     }
-    onAddComment();
-  };
 
-  const handleKeyDown = (e) => {
-    if (typeof onKeyPress !== 'function') {
-      console.error('onKeyPress is not a function:', onKeyPress);
-      return;
+    try {
+      setIsSubmitting(true);
+      console.log("🔄 Comment form submission started...");
+      await onAddComment();
+      console.log("✅ Comment form submission completed");
+    } catch (error) {
+      console.error("❌ Comment form submission error:", error);
+    } finally {
+      setIsSubmitting(false);
     }
-    onKeyPress(e);
-  };
+  }, [isSubmitting, commentLoading, newComment, commentLinks, onAddComment]);
+
+  // Robust key handler
+  const handleKeyDown = useCallback((e) => {
+    // Only handle Ctrl+Enter or Cmd+Enter
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("🚀 Keyboard shortcut triggered");
+      handleSubmit();
+    }
+    
+    // Pass other key events to parent
+    if (typeof onKeyPress === 'function') {
+      onKeyPress(e);
+    }
+  }, [handleSubmit, onKeyPress]);
+
+  // Robust link addition
+  const handleAddLink = useCallback((e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    if (typeof onAddCommentLink === 'function') {
+      onAddCommentLink();
+    }
+  }, [onAddCommentLink]);
 
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3 pt-4 border-t border-gray-200 dark:border-zinc-700">
@@ -45,7 +95,8 @@ const CommentForm = ({
             <button
               type="button"
               onClick={onAddLinkClick}
-              className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+              disabled={isSubmitting}
+              className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-50"
             >
               <PlusIcon className="size-3" />
               {showCommentLinkInput ? "Cancel" : "Add Link"}
@@ -59,13 +110,15 @@ const CommentForm = ({
                 value={commentLinkUrl}
                 onChange={onLinkUrlChange}
                 placeholder="https://example.com"
-                className="flex-1 rounded dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), onAddCommentLink())}
+                disabled={isSubmitting}
+                className="flex-1 rounded dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-zinc-900 dark:text-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                onKeyPress={(e) => e.key === 'Enter' && handleAddLink()}
               />
               <button
                 type="button"
-                onClick={onAddCommentLink}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm flex items-center gap-1"
+                onClick={handleAddLink}
+                disabled={isSubmitting}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm flex items-center gap-1 disabled:opacity-50"
               >
                 <PlusIcon className="size-3" />
                 Add
@@ -86,7 +139,8 @@ const CommentForm = ({
                     <button
                       type="button"
                       onClick={() => onRemoveCommentLink(link.id)}
-                      className="text-red-500 hover:text-red-700"
+                      disabled={isSubmitting}
+                      className="text-red-500 hover:text-red-700 disabled:opacity-50"
                     >
                       <XIcon className="size-3" />
                     </button>
@@ -102,23 +156,27 @@ const CommentForm = ({
           onChange={onCommentChange}
           onKeyDown={handleKeyDown}
           placeholder="Write a comment... (Ctrl+Enter to send)"
-          className="w-full dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md p-3 text-sm text-gray-900 dark:text-zinc-200 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md p-3 text-sm text-gray-900 dark:text-zinc-200 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
           rows={3}
-          disabled={commentLoading}
+          disabled={isSubmitting || commentLoading}
         />
         <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
           Press Ctrl+Enter to send
         </p>
       </div>
+      
       <button
+        type="button" // Using type="button" to avoid form submission issues
         onClick={handleSubmit}
-        disabled={(!newComment.trim() && commentLinks.length === 0) || commentLoading}
-        className="bg-gradient-to-l from-blue-500 to-blue-600 transition-colors text-white text-sm px-6 py-3 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={(!newComment.trim() && commentLinks.length === 0) || isSubmitting || commentLoading}
+        className="bg-gradient-to-l from-blue-500 to-blue-600 transition-colors text-white text-sm px-6 py-3 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-600 hover:to-blue-700"
       >
-        {commentLoading ? "Posting..." : "Post"}
+        {isSubmitting || commentLoading ? "Posting..." : "Post"}
       </button>
     </div>
   );
-};
+});
+
+CommentForm.displayName = 'CommentForm';
 
 export default CommentForm;
