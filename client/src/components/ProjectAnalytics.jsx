@@ -17,7 +17,7 @@ const ProjectAnalytics = ({ project, tasks, folders }) => {
         return [...tasks, ...folderTasks];
     }, [tasks, folders]);
 
-    const { stats, statusData, typeData, priorityData, folderData } = useMemo(() => {
+    const { stats, statusData, typeData, priorityData, folderData, folderDistribution } = useMemo(() => {
         const now = new Date();
         const total = allTasks.length;
 
@@ -95,6 +95,12 @@ const ProjectAnalytics = ({ project, tasks, folders }) => {
             }))
             .sort((a, b) => b.tasks - a.tasks);
 
+        // 🆕 FIXED: Define folderDistribution here
+        const folderDistribution = [
+            { name: 'In Folders', value: stats.withFolders, color: '#3b82f6' },
+            { name: 'No Folder', value: stats.withoutFolders, color: '#6b7280' }
+        ];
+
         return {
             stats,
             statusData: Object.entries(statusMap).map(([k, v]) => ({ 
@@ -116,10 +122,7 @@ const ProjectAnalytics = ({ project, tasks, folders }) => {
                 percentage: total > 0 ? Math.round((v / total) * 100) : 0,
             })),
             folderData,
-            folderDistribution: [
-                { name: 'In Folders', value: stats.withFolders, color: '#3b82f6' },
-                { name: 'No Folder', value: stats.withoutFolders, color: '#6b7280' }
-            ]
+            folderDistribution // 🆕 FIXED: Now properly defined
         };
     }, [allTasks, folders]);
 
