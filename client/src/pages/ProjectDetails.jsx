@@ -258,7 +258,7 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {/* In ProjectDetail.jsx, update the CreateTaskDialog usage: */}
+    
 
       {showCreateTask && (
         <CreateTaskDialog
