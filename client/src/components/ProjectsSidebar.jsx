@@ -7,8 +7,7 @@ import {
     ChartColumnIcon, 
     CalendarIcon, 
     ArrowRightIcon,
-    FolderIcon,
-    FileTextIcon 
+    FolderIcon
 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 
@@ -25,17 +24,11 @@ const ProjectSidebar = () => {
     const [expandedProjects, setExpandedProjects] = useState(new Set());
     const [expandedFolders, setExpandedFolders] = useState(new Set());
 
-    const getProjectSubItems = (projectId) => [
-        { title: 'Tasks', icon: KanbanIcon, url: `/projectsDetail?id=${projectId}&tab=tasks` },
-        { title: 'Folders', icon: FolderIcon, url: `/projectsDetail?id=${projectId}&tab=folders` },
-        { title: 'Analytics', icon: ChartColumnIcon, url: `/projectsDetail?id=${projectId}&tab=analytics` },
-        { title: 'Calendar', icon: CalendarIcon, url: `/projectsDetail?id=${projectId}&tab=calendar` },
-        { title: 'Settings', icon: SettingsIcon, url: `/projectsDetail?id=${projectId}&tab=settings` }
-    ];
-
     const getFolderSubItems = (projectId, folderId) => [
-        { title: 'Tasks', icon: FileTextIcon, url: `/projectsDetail?id=${projectId}&folderId=${folderId}&tab=tasks` },
-        { title: 'View Folder', icon: FolderIcon, url: `/projectsDetail?id=${projectId}&folderId=${folderId}&tab=folders` }
+        { title: 'Tasks', icon: KanbanIcon, url: `/projectsDetail?id=${projectId}&folderId=${folderId}&tab=tasks` },
+        { title: 'Analytics', icon: ChartColumnIcon, url: `/projectsDetail?id=${projectId}&folderId=${folderId}&tab=analytics` },
+        { title: 'Calendar', icon: CalendarIcon, url: `/projectsDetail?id=${projectId}&folderId=${folderId}&tab=calendar` },
+        { title: 'Settings', icon: SettingsIcon, url: `/projectsDetail?id=${projectId}&folderId=${folderId}&tab=settings` }
     ];
 
     const toggleProject = (id) => {
@@ -62,16 +55,6 @@ const ProjectSidebar = () => {
             location.pathname === '/projectsDetail' &&
             searchParams.get('id') === projectId &&
             searchParams.get('folderId') === folderId
-        );
-    };
-
-    // Check if a project sub-item is active
-    const isProjectSubItemActive = (projectId, subItem) => {
-        return (
-            location.pathname === '/projectsDetail' &&
-            searchParams.get('id') === projectId &&
-            searchParams.get('tab') === subItem.title.toLowerCase() &&
-            !searchParams.get('folderId') // Only active when no folder is selected
         );
     };
 
@@ -124,92 +107,70 @@ const ProjectSidebar = () => {
                                 )}
                             </button>
 
-                            {/* Project Sub-items */}
+                            {/* Project Content - Folders and their sub-items */}
                             {isProjectExpanded && (
                                 <div className="ml-5 mt-1 space-y-1">
-                                    {/* Project-level navigation */}
-                                    {getProjectSubItems(project.id).map((subItem) => {
-                                        const isActive = isProjectSubItemActive(project.id, subItem);
+                                    {/* Show all folders as individual expandable items */}
+                                    {projectFolders.map((folder) => {
+                                        const isFolderExpanded = expandedFolders.has(folder.id);
+                                        const isActiveFolder = isFolderActive(project.id, folder.id);
                                         
                                         return (
-                                            <Link 
-                                                key={subItem.title} 
-                                                to={subItem.url} 
-                                                className={`flex items-center gap-3 px-3 py-1.5 rounded-lg transition-colors duration-200 text-xs ${
-                                                    isActive 
-                                                        ? 'bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20' 
-                                                        : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800'
-                                                }`} 
-                                            >
-                                                <subItem.icon className="size-3" />
-                                                {subItem.title}
-                                            </Link>
+                                            <div key={folder.id}>
+                                                {/* Folder Header */}
+                                                <button 
+                                                    onClick={() => toggleFolder(folder.id)} 
+                                                    className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors duration-200 text-xs ${
+                                                        isActiveFolder
+                                                            ? 'bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20'
+                                                            : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800'
+                                                    }`}
+                                                >
+                                                    <ChevronRightIcon 
+                                                        className={`size-3 transition-transform duration-200 ${
+                                                            isFolderExpanded && 'rotate-90'
+                                                        }`} 
+                                                    />
+                                                    <FolderIcon className="size-3" />
+                                                    <span className="truncate flex-1 text-left">
+                                                        {folder.name}
+                                                    </span>
+                                                    <span className="text-xs opacity-60">
+                                                        {folder.tasks?.length || 0}
+                                                    </span>
+                                                </button>
+
+                                                {/* Folder Sub-items - Tasks, Analytics, Calendar, Settings */}
+                                                {isFolderExpanded && (
+                                                    <div className="ml-6 mt-1 space-y-1">
+                                                        {getFolderSubItems(project.id, folder.id).map((subItem) => {
+                                                            const isActive = isFolderSubItemActive(project.id, folder.id, subItem);
+                                                            
+                                                            return (
+                                                                <Link 
+                                                                    key={subItem.title} 
+                                                                    to={subItem.url} 
+                                                                    className={`flex items-center gap-3 px-3 py-1 rounded-lg transition-colors duration-200 text-xs ${
+                                                                        isActive 
+                                                                            ? 'bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20' 
+                                                                            : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800'
+                                                                    }`} 
+                                                                >
+                                                                    <subItem.icon className="size-3" />
+                                                                    {subItem.title}
+                                                                </Link>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
                                         );
                                     })}
 
-                                    {/* Folders Section */}
-                                    {projectFolders.length > 0 && (
-                                        <div className="pt-2 border-t border-gray-200 dark:border-zinc-700">
-                                            <div className="px-3 py-1 text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                                                Folders
-                                            </div>
-                                            <div className="space-y-1 mt-1">
-                                                {projectFolders.map((folder) => {
-                                                    const isFolderExpanded = expandedFolders.has(folder.id);
-                                                    const isActiveFolder = isFolderActive(project.id, folder.id);
-                                                    
-                                                    return (
-                                                        <div key={folder.id}>
-                                                            {/* Folder Header */}
-                                                            <button 
-                                                                onClick={() => toggleFolder(folder.id)} 
-                                                                className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors duration-200 text-xs ${
-                                                                    isActiveFolder
-                                                                        ? 'bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20'
-                                                                        : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800'
-                                                                }`}
-                                                            >
-                                                                <ChevronRightIcon 
-                                                                    className={`size-3 transition-transform duration-200 ${
-                                                                        isFolderExpanded && 'rotate-90'
-                                                                    }`} 
-                                                                />
-                                                                <FolderIcon className="size-3" />
-                                                                <span className="truncate flex-1 text-left">
-                                                                    {folder.name}
-                                                                </span>
-                                                                <span className="text-xs opacity-60">
-                                                                    {folder.tasks?.length || 0}
-                                                                </span>
-                                                            </button>
-
-                                                            {/* Folder Sub-items */}
-                                                            {isFolderExpanded && (
-                                                                <div className="ml-6 mt-1 space-y-1">
-                                                                    {getFolderSubItems(project.id, folder.id).map((subItem) => {
-                                                                        const isActive = isFolderSubItemActive(project.id, folder.id, subItem);
-                                                                        
-                                                                        return (
-                                                                            <Link 
-                                                                                key={subItem.title} 
-                                                                                to={subItem.url} 
-                                                                                className={`flex items-center gap-3 px-3 py-1 rounded-lg transition-colors duration-200 text-xs ${
-                                                                                    isActive 
-                                                                                        ? 'bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20' 
-                                                                                        : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800'
-                                                                                }`} 
-                                                                            >
-                                                                                <subItem.icon className="size-3" />
-                                                                                {subItem.title}
-                                                                            </Link>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                    {/* If no folders, show a message */}
+                                    {projectFolders.length === 0 && (
+                                        <div className="px-3 py-2 text-xs text-gray-500 dark:text-zinc-400 italic">
+                                            No folders yet
                                         </div>
                                     )}
                                 </div>
