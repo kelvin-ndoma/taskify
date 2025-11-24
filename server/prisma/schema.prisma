@@ -70,6 +70,23 @@ model Project {
   workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members     ProjectMember[]
   tasks       Task[]
+  folders     Folder[]        // NEW: Folders relationship
+}
+
+model Folder {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  projectId   String
+  position    Int?     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks       Task[]   // Tasks in this folder
+  
+  @@unique([projectId, name]) // Ensure folder names are unique within a project
+  @@index([projectId])
 }
 
 model ProjectMember {
@@ -85,18 +102,24 @@ model ProjectMember {
 model Task {
   id          String         @id @default(uuid())
   projectId   String
+  folderId    String?        // NEW: Optional folder relationship
   title       String
   description String?
   status      TaskStatus     @default(TODO)
   type        TaskType       @default(GENERAL_TASK)
   priority    Priority       @default(MEDIUM)
   due_date    DateTime?
+  position    Int?           @default(0) // NEW: Position for ordering within folders
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   comments    Comment[]
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder      Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull) // NEW: Folder relation
   assignees   TaskAssignee[]
   links       TaskLink[]
+  
+  @@index([projectId])
+  @@index([folderId]) // NEW: Index for folder queries
 }
 
 model TaskAssignee {
