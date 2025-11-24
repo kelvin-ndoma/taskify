@@ -1,4 +1,4 @@
-// TaskDetails.jsx - FIXED VERSION
+// TaskDetails.jsx - COMPLETE FIXED VERSION
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { useSelector, useDispatch } from "react-redux";
@@ -48,6 +48,47 @@ const TaskDetails = () => {
 
   const { currentWorkspace } = useSelector((state) => state.workspace);
 
+  // Debug useEffect for availableMembers
+  useEffect(() => {
+    console.log("🔍 DEBUG availableMembers:", {
+      availableMembers,
+      availableMembersLength: availableMembers?.length,
+      availableMembersData: availableMembers?.map(m => ({
+        id: m?.user?.id,
+        name: m?.user?.name,
+        email: m?.user?.email
+      }))
+    });
+  }, [availableMembers]);
+
+  // Debug useEffect for task data
+  useEffect(() => {
+    if (task) {
+      console.log("🔍 DEBUG Task Data:", {
+        taskId: task.id,
+        projectId: task.projectId,
+        assignees: task.assignees?.map(a => ({
+          id: a?.user?.id,
+          name: a?.user?.name
+        })),
+        projectMembers: task.project?.members?.length
+      });
+    }
+  }, [task]);
+
+  // Debug useEffect for currentWorkspace
+  useEffect(() => {
+    console.log("🔍 DEBUG currentWorkspace:", {
+      workspaceId: currentWorkspace?.id,
+      workspaceName: currentWorkspace?.name,
+      workspaceMembers: currentWorkspace?.members?.length,
+      workspaceMembersData: currentWorkspace?.members?.map(m => ({
+        id: m?.user?.id,
+        name: m?.user?.name
+      }))
+    });
+  }, [currentWorkspace]);
+
   // Helper functions
   const canEditTask = () => {
     if (!task || !user) return false;
@@ -61,7 +102,7 @@ const TaskDetails = () => {
     return isWorkspaceAdmin || isProjectLead || isTaskAssignee;
   };
 
-  // FIXED: fetchComments function - removed dependencies that cause re-fetching
+  // FIXED: fetchComments function
   const fetchComments = useCallback(async (silent = false) => {
     if (!taskId) return;
     
@@ -101,8 +142,49 @@ const TaskDetails = () => {
         setCommentsLoading(false);
       }
     }
-  }, [taskId, getToken]); // FIXED: Removed 'comments' and 'newComment' dependencies
+  }, [taskId, getToken]);
 
+  // FIXED: Function to fetch workspace members
+  const fetchWorkspaceMembers = async () => {
+    try {
+      const token = await getToken();
+      const workspaceId = currentWorkspace?.id;
+      
+      if (!workspaceId) {
+        console.log("❌ No workspace ID available");
+        return [];
+      }
+
+      console.log("🔄 Fetching workspace members for workspace:", workspaceId);
+      
+      // Make API call to get workspace members
+      const { data } = await api.get(`/api/workspaces/${workspaceId}/members`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (data?.members) {
+        console.log("✅ Fetched workspace members:", data.members.length);
+        const safeMembers = data.members
+          .filter(member => member?.user != null)
+          .map(member => ({
+            ...member,
+            user: {
+              id: member.user.id,
+              name: member.user.name,
+              email: member.user.email,
+              image: member.user.image
+            }
+          }));
+        return safeMembers;
+      }
+      return [];
+    } catch (error) {
+      console.error("❌ Failed to fetch workspace members:", error);
+      return [];
+    }
+  };
+
+  // FIXED: fetchTaskDetails function
   const fetchTaskDetails = async () => {
     setLoading(true);
     if (!taskId) {
@@ -146,19 +228,48 @@ const TaskDetails = () => {
           due_date: data.task.due_date
         });
         
-        // Safely set available members
-        if (data.task.project?.members) {
-          const safeMembers = data.task.project.members.filter(member => member?.user != null);
+        // FIXED: Get ALL workspace members
+        console.log("🔄 Getting workspace members...");
+        
+        // First try to get from currentWorkspace
+        if (currentWorkspace?.members && currentWorkspace.members.length > 0) {
+          console.log("👥 Using currentWorkspace members:", currentWorkspace.members.length);
+          const safeMembers = currentWorkspace.members
+            .filter(member => member?.user != null)
+            .map(member => ({
+              ...member,
+              user: {
+                id: member.user.id,
+                name: member.user.name,
+                email: member.user.email,
+                image: member.user.image
+              }
+            }));
           setAvailableMembers(safeMembers);
+          console.log("✅ Set availableMembers from workspace:", safeMembers.length);
         } else {
-          const proj = currentWorkspace?.projects?.find((p) => p.id === projectId);
-          if (proj?.members) {
-            const safeMembers = proj.members.filter(member => member?.user != null);
-            setAvailableMembers(safeMembers);
+          // Fallback: Fetch workspace members via API
+          console.log("🔄 No workspace members in Redux, fetching via API...");
+          const workspaceMembers = await fetchWorkspaceMembers();
+          if (workspaceMembers.length > 0) {
+            setAvailableMembers(workspaceMembers);
+            console.log("✅ Set availableMembers from API:", workspaceMembers.length);
+          } else {
+            // Final fallback: Try to get members from project
+            console.log("🔄 No workspace members found, trying project members...");
+            if (data.task.project?.members) {
+              const safeMembers = data.task.project.members.filter(member => member?.user != null);
+              setAvailableMembers(safeMembers);
+              console.log("🔄 Fallback to project members:", safeMembers.length);
+            } else {
+              console.log("❌ No members found anywhere");
+              setAvailableMembers([]);
+            }
           }
         }
       } else {
         // Fallback to Redux store if API fails
+        console.log("🔄 Falling back to Redux store data");
         const proj = currentWorkspace?.projects?.find((p) => p.id === projectId);
         if (!proj) {
           setLoading(false);
@@ -191,9 +302,15 @@ const TaskDetails = () => {
           due_date: tsk.due_date
         });
         
-        if (proj.members) {
+        // FIXED: Use workspace members for fallback too
+        if (currentWorkspace?.members && currentWorkspace.members.length > 0) {
+          const safeMembers = currentWorkspace.members.filter(member => member?.user != null);
+          setAvailableMembers(safeMembers);
+        } else if (proj.members) {
           const safeMembers = proj.members.filter(member => member?.user != null);
           setAvailableMembers(safeMembers);
+        } else {
+          setAvailableMembers([]);
         }
       }
     } catch (error) {
@@ -232,9 +349,15 @@ const TaskDetails = () => {
         due_date: tsk.due_date
       });
       
-      if (proj.members) {
+      // FIXED: Use workspace members for fallback
+      if (currentWorkspace?.members && currentWorkspace.members.length > 0) {
+        const safeMembers = currentWorkspace.members.filter(member => member?.user != null);
+        setAvailableMembers(safeMembers);
+      } else if (proj.members) {
         const safeMembers = proj.members.filter(member => member?.user != null);
         setAvailableMembers(safeMembers);
+      } else {
+        setAvailableMembers([]);
       }
     } finally {
       setLoading(false);
@@ -589,12 +712,27 @@ const TaskDetails = () => {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [taskId, fetchComments]); // FIXED: Only depend on taskId and fetchComments
+  }, [taskId, fetchComments]);
 
   // Task details effect
   useEffect(() => {
     fetchTaskDetails();
   }, [taskId, projectId, currentWorkspace]);
+
+  // FIXED: Additional fallback for workspace members
+  useEffect(() => {
+    if (currentWorkspace?.id && availableMembers?.length === 0) {
+      console.log("🔄 No available members, trying to fetch workspace members...");
+      const tryFetchMembers = async () => {
+        const workspaceMembers = await fetchWorkspaceMembers();
+        if (workspaceMembers.length > 0) {
+          setAvailableMembers(workspaceMembers);
+          console.log("✅ Finally set availableMembers from API:", workspaceMembers.length);
+        }
+      };
+      tryFetchMembers();
+    }
+  }, [currentWorkspace?.id, availableMembers?.length]);
 
   if (loading) return <div className="text-gray-500 dark:text-zinc-400 px-4 py-6">Loading task details...</div>;
   if (!task) return <div className="text-red-500 px-4 py-6">Task not found.</div>;
