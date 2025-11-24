@@ -1,3 +1,4 @@
+// controllers/commentController.js
 import prisma from "../configs/prisma.js";
 import { inngest } from "../inngest/index.js";
 
@@ -12,19 +13,14 @@ export const addComment = async (req, res) => {
       userId, 
       taskId, 
       contentLength: content?.length,
-      linksCount: links?.length 
+      linksCount: links?.length,
+      linksData: links
     });
 
-    // Validate input
-    if (!taskId || !content) {
+    // FIXED: Allow comments with only links (no content)
+    if (!taskId || (!content?.trim() && links.length === 0)) {
       return res.status(400).json({ 
-        message: "Task ID and content are required." 
-      });
-    }
-
-    if (content.trim().length === 0) {
-      return res.status(400).json({ 
-        message: "Comment content cannot be empty." 
+        message: "Task ID and either content or links are required." 
       });
     }
 
@@ -75,36 +71,36 @@ export const addComment = async (req, res) => {
 
     console.log("🔄 Starting transaction to create comment with links...");
 
-    // Create comment with transaction - SIMPLIFIED AND FIXED
+    // Create comment with transaction - FIXED VERSION
     const result = await prisma.$transaction(async (tx) => {
       try {
         // Step 1: Create the comment first
         const comment = await tx.comment.create({
           data: { 
             taskId, 
-            content: content.trim(), 
+            content: content?.trim() || "", // Allow empty content if links exist
             userId,
           },
         });
 
         console.log(`✅ Comment created: ${comment.id}`);
 
-        // Step 2: Create comment links if provided
+        // Step 2: Create comment links if provided - FIXED: Use createMany
         if (links && links.length > 0) {
           console.log(`🔄 Creating ${links.length} comment links...`);
           
-          const linkPromises = links.map((link) => 
-            tx.commentLink.create({
-              data: {
-                url: link.url,
-                commentId: comment.id,
-                userId: userId,
-              },
-            })
-          );
+          const linkCreationData = links.map((link) => ({
+            url: link.url,
+            commentId: comment.id,
+            userId: userId,
+          }));
 
-          await Promise.all(linkPromises);
-          console.log(`✅ Created ${links.length} comment links`);
+          await tx.commentLink.createMany({
+            data: linkCreationData,
+            skipDuplicates: true,
+          });
+          
+          console.log(`✅ Created ${links.length} comment links for comment ${comment.id}`);
         }
 
         // Step 3: Fetch the complete comment with all relationships
@@ -138,8 +134,8 @@ export const addComment = async (req, res) => {
 
         console.log(`📊 Complete comment fetched:`, {
           id: completeComment.id,
-          linksCount: completeComment.links?.length,
-          links: completeComment.links
+          linksCount: completeComment.links?.length || 0,
+          links: completeComment.links || []
         });
 
         return completeComment;
@@ -176,8 +172,16 @@ export const addComment = async (req, res) => {
 
   } catch (error) {
     console.error("💥 Add comment error:", error);
+    
+    // Better error handling
+    if (error.code === 'P2002') {
+      return res.status(400).json({ 
+        message: "A comment link with this URL already exists for this comment." 
+      });
+    }
+    
     res.status(500).json({ 
-      message: error.message || "Internal server error",
+      message: error.message || "Internal server error while creating comment",
       code: error.code
     });
   }
@@ -197,15 +201,10 @@ export const updateComment = async (req, res) => {
       linksCount: links?.length 
     });
 
-    if (!commentId || !content) {
+    // FIXED: Allow comments with only links
+    if (!commentId || (!content?.trim() && (!links || links.length === 0))) {
       return res.status(400).json({ 
-        message: "Comment ID and content are required." 
-      });
-    }
-
-    if (content.trim().length === 0) {
-      return res.status(400).json({ 
-        message: "Comment content cannot be empty." 
+        message: "Comment ID and either content or links are required." 
       });
     }
 
@@ -279,13 +278,13 @@ export const updateComment = async (req, res) => {
         await tx.comment.update({
           where: { id: commentId },
           data: { 
-            content: content.trim(),
+            content: content?.trim() || "",
           },
         });
 
         console.log(`✅ Comment content updated: ${commentId}`);
 
-        // Handle links update
+        // Handle links update - FIXED: Use createMany
         if (links !== undefined) {
           console.log(`🔄 Updating comment links...`);
           
@@ -297,17 +296,16 @@ export const updateComment = async (req, res) => {
 
           // Create new links if provided
           if (links.length > 0) {
-            const linkPromises = links.map((link) =>
-              tx.commentLink.create({
-                data: {
-                  url: link.url,
-                  commentId: commentId,
-                  userId: userId,
-                },
-              })
-            );
+            const linkCreationData = links.map((link) => ({
+              url: link.url,
+              commentId: commentId,
+              userId: userId,
+            }));
 
-            await Promise.all(linkPromises);
+            await tx.commentLink.createMany({
+              data: linkCreationData,
+              skipDuplicates: true,
+            });
             console.log(`✅ Created ${links.length} new links for comment ${commentId}`);
           }
         }
@@ -343,7 +341,7 @@ export const updateComment = async (req, res) => {
 
         console.log(`📊 Updated comment fetched:`, {
           id: completeComment.id,
-          linksCount: completeComment.links?.length
+          linksCount: completeComment.links?.length || 0
         });
 
         return completeComment;

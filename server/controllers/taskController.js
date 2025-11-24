@@ -17,7 +17,7 @@ export const createTask = async (req, res) => {
       priority = "MEDIUM",
       assignees = [],
       due_date,
-      links = [], // 🆕 NEW: Array of { url, title } objects for task links
+      links = [], // Array of { url, title } objects for task links
     } = req.body;
 
     // Validate required fields
@@ -98,14 +98,14 @@ export const createTask = async (req, res) => {
       }
     }
 
-    // 🆕 NEW: Validate links
+    // FIXED: Validate links - removed unique URL validation
     if (links && Array.isArray(links)) {
       for (const link of links) {
         if (!link.url) {
           return res.status(400).json({ message: "Link URL is required for all links." });
         }
         try {
-          new URL(link.url); // Validate URL format
+          new URL(link.url); // Validate URL format only
         } catch (error) {
           return res.status(400).json({ message: `Invalid URL: ${link.url}` });
         }
@@ -137,7 +137,7 @@ export const createTask = async (req, res) => {
         });
       }
 
-      // 🆕 NEW: Create task links if provided
+      // FIXED: Create task links if provided - allow multiple links
       if (links && links.length > 0) {
         await tx.taskLink.createMany({
           data: links.map((link) => ({
@@ -149,7 +149,7 @@ export const createTask = async (req, res) => {
         });
       }
 
-      // Return task with full details including links
+      // Return task with full details including links - ENHANCED
       return await tx.task.findUnique({
         where: { id: task.id },
         include: {
@@ -165,7 +165,7 @@ export const createTask = async (req, res) => {
               },
             },
           },
-          links: { // 🆕 NEW: Include task links
+          links: {
             include: {
               user: {
                 select: {
@@ -175,6 +175,9 @@ export const createTask = async (req, res) => {
                 },
               },
             },
+            orderBy: {
+              createdAt: 'asc'
+            }
           },
           project: {
             select: {
@@ -182,11 +185,19 @@ export const createTask = async (req, res) => {
               name: true,
               workspace: {
                 select: {
-                  name: true
+                  id: true,
+                  name: true,
+                  slug: true
                 }
               }
             },
           },
+          // FIXED: Include comments count for better display
+          _count: {
+            select: {
+              comments: true
+            }
+          }
         },
       });
     });
@@ -259,7 +270,7 @@ export const updateTask = async (req, res) => {
             user: true,
           },
         },
-        links: true, // 🆕 NEW: Include existing links
+        links: true,
         project: {
           include: {
             workspace: {
@@ -285,7 +296,7 @@ export const updateTask = async (req, res) => {
       priority,
       assignees,
       due_date,
-      links, // 🆕 NEW: Array of { url, title } objects for task links
+      links,
     } = req.body;
 
     // Validate enum values if provided
@@ -346,14 +357,14 @@ export const updateTask = async (req, res) => {
       }
     }
 
-    // 🆕 NEW: Validate links if provided
+    // FIXED: Validate links - removed unique URL validation
     if (links && Array.isArray(links)) {
       for (const link of links) {
         if (!link.url) {
           return res.status(400).json({ message: "Link URL is required for all links." });
         }
         try {
-          new URL(link.url); // Validate URL format
+          new URL(link.url);
         } catch (error) {
           return res.status(400).json({ message: `Invalid URL: ${link.url}` });
         }
@@ -379,7 +390,7 @@ export const updateTask = async (req, res) => {
         },
       });
 
-      // 🆕 NEW: Update task links if provided
+      // FIXED: Update task links - allow multiple links
       if (links !== undefined) {
         // Delete all existing links for this task
         await tx.taskLink.deleteMany({
@@ -432,7 +443,7 @@ export const updateTask = async (req, res) => {
         }
       }
 
-      // Return updated task with full details including links
+      // Return updated task with full details including links - ENHANCED
       return await tx.task.findUnique({
         where: { id: taskId },
         include: {
@@ -448,7 +459,7 @@ export const updateTask = async (req, res) => {
               },
             },
           },
-          links: { // 🆕 NEW: Include task links
+          links: {
             include: {
               user: {
                 select: {
@@ -458,13 +469,27 @@ export const updateTask = async (req, res) => {
                 },
               },
             },
+            orderBy: {
+              createdAt: 'asc'
+            }
           },
           project: {
             select: {
               id: true,
               name: true,
+              workspace: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
             },
           },
+          _count: {
+            select: {
+              comments: true
+            }
+          }
         },
       });
     });
@@ -524,7 +549,7 @@ export const updateTask = async (req, res) => {
   }
 };
 
-// Get task by ID - UPDATED to include links
+// Get task by ID - ENHANCED for better display
 export const getTask = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -545,7 +570,7 @@ export const getTask = async (req, res) => {
             },
           },
         },
-        links: { // 🆕 NEW: Include task links
+        links: {
           include: {
             user: {
               select: {
@@ -555,6 +580,9 @@ export const getTask = async (req, res) => {
               },
             },
           },
+          orderBy: {
+            createdAt: 'asc'
+          }
         },
         project: {
           include: {
@@ -579,7 +607,7 @@ export const getTask = async (req, res) => {
                 image: true,
               },
             },
-            links: { // 🆕 NEW: Include comment links
+            links: {
               include: {
                 user: {
                   select: {
@@ -589,12 +617,23 @@ export const getTask = async (req, res) => {
                   },
                 },
               },
+              orderBy: {
+                createdAt: 'asc'
+              }
             },
           },
           orderBy: {
             createdAt: "desc",
           },
         },
+        // FIXED: Include counts for better display
+        _count: {
+          select: {
+            comments: true,
+            assignees: true,
+            links: true
+          }
+        }
       },
     });
 
@@ -622,7 +661,7 @@ export const getTask = async (req, res) => {
   }
 };
 
-// Get tasks by project - UPDATED to include links
+// Get tasks by project - ENHANCED for better display
 export const getProjectTasks = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -673,7 +712,7 @@ export const getProjectTasks = async (req, res) => {
             },
           },
         },
-        links: { // 🆕 NEW: Include task links
+        links: {
           include: {
             user: {
               select: {
@@ -683,6 +722,9 @@ export const getProjectTasks = async (req, res) => {
               },
             },
           },
+          orderBy: {
+            createdAt: 'asc'
+          }
         },
         comments: {
           include: {
@@ -695,6 +737,13 @@ export const getProjectTasks = async (req, res) => {
             },
           },
         },
+        // FIXED: Include counts for better display
+        _count: {
+          select: {
+            comments: true,
+            assignees: true
+          }
+        }
       },
       orderBy: {
         createdAt: "desc",
@@ -708,7 +757,7 @@ export const getProjectTasks = async (req, res) => {
   }
 };
 
-// Delete single task by ID (no changes needed - cascade delete handles links)
+// Delete single task by ID
 export const deleteTask = async (req, res) => {
   try {
     const { userId } = await req.auth();
@@ -761,7 +810,7 @@ export const deleteTask = async (req, res) => {
   }
 };
 
-// Delete multiple tasks (bulk deletion) - no changes needed
+// Delete multiple tasks (bulk deletion)
 export const deleteTasks = async (req, res) => {
   try {
     const { userId } = await req.auth();

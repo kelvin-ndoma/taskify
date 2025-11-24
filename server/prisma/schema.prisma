@@ -131,7 +131,9 @@ model TaskLink {
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([url, taskId])
+  // @@unique([url, taskId])
+  @@index([taskId])
+  @@index([userId])
 }
 
 model CommentLink {
@@ -143,7 +145,9 @@ model CommentLink {
   comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // REMOVED: @@unique([url, commentId]) - This was preventing multiple links per comment
+  @@index([commentId])
+  @@index([userId])
+
 }
 
 enum WorkspaceRole {
