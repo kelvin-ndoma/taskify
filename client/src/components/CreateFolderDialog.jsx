@@ -1,13 +1,32 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 
-const CreateFolderDialog = ({ isOpen, onClose, onSubmit, projectId }) => {
+const CreateFolderDialog = ({ isOpen, onClose, onSubmit, projectId, initialData, isEditing = false }) => {
     const [formData, setFormData] = useState({
         name: "",
         description: "",
         position: 0
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Reset form when dialog opens/closes or when initialData changes
+    useEffect(() => {
+        if (isOpen) {
+            if (initialData) {
+                setFormData({
+                    name: initialData.name || "",
+                    description: initialData.description || "",
+                    position: initialData.position || 0
+                });
+            } else {
+                setFormData({
+                    name: "",
+                    description: "",
+                    position: 0
+                });
+            }
+        }
+    }, [isOpen, initialData]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -26,12 +45,6 @@ const CreateFolderDialog = ({ isOpen, onClose, onSubmit, projectId }) => {
         
         try {
             await onSubmit(formData);
-            // Reset form on success
-            setFormData({
-                name: "",
-                description: "",
-                position: 0
-            });
         } catch (error) {
             console.error("Form submission error:", error);
         } finally {
@@ -56,7 +69,7 @@ const CreateFolderDialog = ({ isOpen, onClose, onSubmit, projectId }) => {
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-700">
                     <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
-                        Create New Folder
+                        {isEditing ? "Edit Folder" : "Create New Folder"}
                     </h2>
                     <button
                         onClick={handleClose}
@@ -127,7 +140,7 @@ const CreateFolderDialog = ({ isOpen, onClose, onSubmit, projectId }) => {
                             disabled={isSubmitting || !formData.name.trim()}
                             className="px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed rounded-lg transition-colors"
                         >
-                            {isSubmitting ? "Creating..." : "Create Folder"}
+                            {isSubmitting ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update Folder" : "Create Folder")}
                         </button>
                     </div>
                 </form>

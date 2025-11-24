@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useAuth } from "@clerk/clerk-react";
-import { Plus, Folder, MoreVertical, FileText, Users, Calendar } from "lucide-react";
+import { Plus, Folder, MoreVertical, FileText, Users, Calendar, Edit, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../configs/api";
-import { addFolder } from "../features/workspaceSlice";
+import { addFolder, updateFolder, deleteFolder } from "../features/workspaceSlice";
 import CreateFolderDialog from "./CreateFolderDialog";
 
 export default function ProjectFolders({ folders, projectId }) {
     const dispatch = useDispatch();
     const { getToken } = useAuth();
     const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
+    const [editingFolder, setEditingFolder] = useState(null);
 
     const handleCreateFolder = async (folderData) => {
         try {
@@ -33,6 +34,46 @@ export default function ProjectFolders({ folders, projectId }) {
         } catch (error) {
             console.error("Create folder error:", error);
             toast.error(error?.response?.data?.message || "Failed to create folder");
+        }
+    };
+
+    const handleEditFolder = async (folderId, updates) => {
+        try {
+            const token = await getToken();
+            const { data } = await api.put(
+                `/api/projects/${projectId}/folders/${folderId}`,
+                updates,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            dispatch(updateFolder({ ...data.folder, projectId }));
+            toast.success("Folder updated successfully!");
+            setEditingFolder(null);
+            
+        } catch (error) {
+            console.error("Update folder error:", error);
+            toast.error(error?.response?.data?.message || "Failed to update folder");
+        }
+    };
+
+    const handleDeleteFolder = async (folderId) => {
+        if (!confirm("Are you sure you want to delete this folder? Tasks will be moved to project root.")) {
+            return;
+        }
+
+        try {
+            const token = await getToken();
+            await api.delete(
+                `/api/projects/${projectId}/folders/${folderId}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            dispatch(deleteFolder({ projectId, folderId }));
+            toast.success("Folder deleted successfully!");
+            
+        } catch (error) {
+            console.error("Delete folder error:", error);
+            toast.error(error?.response?.data?.message || "Failed to delete folder");
         }
     };
 
@@ -86,7 +127,13 @@ export default function ProjectFolders({ folders, projectId }) {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {folders.map((folder) => (
-                        <FolderCard key={folder.id} folder={folder} projectId={projectId} />
+                        <FolderCard 
+                            key={folder.id} 
+                            folder={folder} 
+                            projectId={projectId}
+                            onEdit={() => setEditingFolder(folder)}
+                            onDelete={() => handleDeleteFolder(folder.id)}
+                        />
                     ))}
                 </div>
             )}
@@ -98,28 +145,37 @@ export default function ProjectFolders({ folders, projectId }) {
                 onSubmit={handleCreateFolder}
                 projectId={projectId}
             />
+
+            {/* Edit Folder Dialog */}
+            {editingFolder && (
+                <CreateFolderDialog
+                    isOpen={!!editingFolder}
+                    onClose={() => setEditingFolder(null)}
+                    onSubmit={(data) => handleEditFolder(editingFolder.id, data)}
+                    projectId={projectId}
+                    initialData={editingFolder}
+                    isEditing={true}
+                />
+            )}
         </div>
     );
 }
 
 // Folder Card Component
-function FolderCard({ folder, projectId }) {
+function FolderCard({ folder, projectId, onEdit, onDelete }) {
     const taskCount = folder.tasks?.length || 0;
     const completedTasks = folder.tasks?.filter(task => task.status === "DONE").length || 0;
     const progress = taskCount > 0 ? Math.round((completedTasks / taskCount) * 100) : 0;
 
     const handleClick = () => {
         // Navigate to folder tasks view
-        window.location.href = `/taskDetails?projectId=${projectId}&folderId=${folder.id}`;
+        window.location.href = `/projectsDetail?id=${projectId}&folderId=${folder.id}&tab=tasks`;
     };
 
     return (
-        <div 
-            onClick={handleClick}
-            className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 hover:shadow-md transition-all cursor-pointer group"
-        >
+        <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 hover:shadow-md transition-all cursor-pointer group">
             <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3" onClick={handleClick}>
                     <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                         <Folder className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
@@ -132,13 +188,24 @@ function FolderCard({ folder, projectId }) {
                         </p>
                     </div>
                 </div>
-                <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded transition-all">
-                    <MoreVertical className="w-4 h-4 text-zinc-400" />
-                </button>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                        className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded transition-colors"
+                    >
+                        <Edit className="w-3 h-3 text-zinc-400" />
+                    </button>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                        className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded transition-colors"
+                    >
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                    </button>
+                </div>
             </div>
 
             {/* Progress Bar */}
-            <div className="mb-3">
+            <div className="mb-3" onClick={handleClick}>
                 <div className="flex justify-between items-center mb-1">
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
                         Progress
@@ -156,7 +223,7 @@ function FolderCard({ folder, projectId }) {
             </div>
 
             {/* Stats */}
-            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400" onClick={handleClick}>
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-1">
                         <FileText className="w-3 h-3" />
