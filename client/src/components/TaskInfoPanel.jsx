@@ -1,4 +1,4 @@
-// components/TaskInfoPanel.js - UPDATED VERSION
+// components/TaskInfoPanel.js - ENHANCED VERSION
 import React from 'react';
 import { Save, LinkIcon, PenIcon, ExternalLinkIcon } from "lucide-react";
 import { format } from "date-fns";
@@ -24,13 +24,94 @@ const TaskInfoPanel = ({
   onAddAssignee,
   onRemoveAssignee
 }) => {
-  // Enhanced content rendering with better URL detection
-  const renderContentWithLinks = (content) => {
+  // Enhanced content rendering with proper list formatting and URL detection
+  const renderFormattedContent = (content) => {
     if (!content) return null;
+
+    // Split by lines to handle lists properly
+    const lines = content.split('\n');
+    
+    return lines.map((line, lineIndex) => {
+      // Check for numbered lists (1., 2., 3. etc.)
+      const numberedListMatch = line.match(/^(\d+)\.\s+(.*)$/);
+      if (numberedListMatch) {
+        const [, number, text] = numberedListMatch;
+        return (
+          <div key={lineIndex} className="flex items-start gap-2 mb-1">
+            <span className="flex-shrink-0 text-sm font-medium text-gray-600 dark:text-zinc-400 min-w-6">
+              {number}.
+            </span>
+            <span className="text-sm text-gray-600 dark:text-zinc-400 flex-1">
+              {renderLineWithLinks(text)}
+            </span>
+          </div>
+        );
+      }
+
+      // Check for bullet points (-, *, •)
+      const bulletListMatch = line.match(/^[-*•]\s+(.*)$/);
+      if (bulletListMatch) {
+        const [, text] = bulletListMatch;
+        return (
+          <div key={lineIndex} className="flex items-start gap-2 mb-1">
+            <span className="flex-shrink-0 text-sm text-gray-600 dark:text-zinc-400 mt-0.5">
+              •
+            </span>
+            <span className="text-sm text-gray-600 dark:text-zinc-400 flex-1">
+              {renderLineWithLinks(text)}
+            </span>
+          </div>
+        );
+      }
+
+      // Check for nested lists (with indentation)
+      const nestedListMatch = line.match(/^\s{2,}[-*•]\s+(.*)$/);
+      if (nestedListMatch) {
+        const [, text] = nestedListMatch;
+        return (
+          <div key={lineIndex} className="flex items-start gap-2 mb-1 ml-4">
+            <span className="flex-shrink-0 text-sm text-gray-600 dark:text-zinc-400 mt-0.5">
+              ◦
+            </span>
+            <span className="text-sm text-gray-600 dark:text-zinc-400 flex-1">
+              {renderLineWithLinks(text)}
+            </span>
+          </div>
+        );
+      }
+
+      // Check for nested numbered lists
+      const nestedNumberedMatch = line.match(/^\s{2,}(\d+)\.\s+(.*)$/);
+      if (nestedNumberedMatch) {
+        const [, number, text] = nestedNumberedMatch;
+        return (
+          <div key={lineIndex} className="flex items-start gap-2 mb-1 ml-4">
+            <span className="flex-shrink-0 text-sm font-medium text-gray-600 dark:text-zinc-400 min-w-6">
+              {number}.
+            </span>
+            <span className="text-sm text-gray-600 dark:text-zinc-400 flex-1">
+              {renderLineWithLinks(text)}
+            </span>
+          </div>
+        );
+      }
+
+      // Regular line with URL detection
+      return (
+        <div key={lineIndex} className="mb-2 last:mb-0">
+          {line.trim() ? renderLineWithLinks(line) : <br />}
+        </div>
+      );
+    });
+  };
+
+  // Helper function to render individual lines with URL detection
+  const renderLineWithLinks = (text) => {
+    if (!text) return null;
 
     const urlRegex = /(https?:\/\/[^\s<>{}\[\]\\^`|()]+[^\s<>{}\[\]\\^`|.,!?;)]\)?)/gi;
     
-    const parts = content.split(urlRegex);
+    const parts = text.split(urlRegex);
     
     return parts.map((part, index) => {
       if (urlRegex.test(part)) {
@@ -70,17 +151,34 @@ const TaskInfoPanel = ({
 
         {/* Editable Description */}
         {isEditingTask ? (
-          <textarea
-            value={editingTaskData.description || ""}
-            onChange={(e) => onTaskDataChange('description', e.target.value)}
-            placeholder="Task description"
-            className="w-full dark:bg-zinc-800 border border-gray-300 dark:border-zinc-600 rounded p-2 text-sm text-gray-900 dark:text-zinc-200 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-            rows={3}
-          />
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-gray-700 dark:text-zinc-300 mb-2">
+              Description (supports lists and links)
+            </label>
+            <textarea
+              value={editingTaskData.description || ""}
+              onChange={(e) => onTaskDataChange('description', e.target.value)}
+              placeholder={`Enter task description...
+• Use bullets with - or *
+• Use numbers like 1. 2. 3.
+• Indent with spaces for nested lists
+• URLs will be automatically linked`}
+              className="w-full dark:bg-zinc-800 border border-gray-300 dark:border-zinc-600 rounded p-3 text-sm text-gray-900 dark:text-zinc-200 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              rows={6}
+            />
+            <div className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+              <strong>Formatting tips:</strong> Use "- item" for bullets, "1. item" for numbers, indent with 2 spaces for nested lists
+            </div>
+          </div>
         ) : (
           task.description && (
-            <div className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed mb-4">
-              {renderContentWithLinks(task.description)}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-700 dark:text-zinc-300 mb-2">
+                Description
+              </label>
+              <div className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed">
+                {renderFormattedContent(task.description)}
+              </div>
             </div>
           )
         )}
