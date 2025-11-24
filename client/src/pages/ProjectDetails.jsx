@@ -225,7 +225,6 @@ export default function ProjectDetail() {
         </div>
 
         <div className="mt-6">
-          // In ProjectDetail.jsx, update the ProjectTasks usage:
           {activeTab === "tasks" && (
             <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
               <ProjectTasks tasks={tasks} folders={folders} projectId={id} />
