@@ -6,15 +6,15 @@ import {
   getWorkspaceTeamMembers
 } from '../controllers/teamController.js';
 
-const teamRouter = express.Router();
+const teamRouter = express.Router(); // ✅ Make sure this line exists
 
 // Get tasks for a specific team member in a workspace
-router.get('/:workspaceId/members/:memberId/tasks', getMemberTasks);
+teamRouter.get('/:workspaceId/members/:memberId/tasks', getMemberTasks);
 
 // Get statistics for a specific team member
-router.get('/:workspaceId/members/:memberId/stats', getMemberStats);
+teamRouter.get('/:workspaceId/members/:memberId/stats', getMemberStats);
 
 // Get all team members with their task counts for a workspace
-router.get('/:workspaceId/team-members', getWorkspaceTeamMembers);
+teamRouter.get('/:workspaceId/team-members', getWorkspaceTeamMembers);
 
-export default teamRouter;
+export default teamRouter; // ✅ Make sure this line exists
