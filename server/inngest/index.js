@@ -1,3 +1,4 @@
+// inngest/index.js
 import { Inngest } from "inngest";
 import prisma from "../configs/prisma.js";
 import sendEmail from "../configs/resend.js";
@@ -8,56 +9,33 @@ const DEFAULT_WORKSPACE_NAME = "The Burns Brothers";
 const DEFAULT_WORKSPACE_SLUG = "the-burns-brothers";
 
 /* =========================================================
-   🔹 CLERK USER SYNC FUNCTIONS
+   🔹 CUSTOM AUTH USER FUNCTIONS (REPLACING CLERK)
 ========================================================= */
 
+// User registration - triggered after user signs up
 const syncUserCreation = inngest.createFunction(
-  { id: "sync-user-from-clerk" },
-  { event: "clerk/user.created" },
+  { id: "sync-user-from-registration" },
+  { event: "app/user.registered" },
   async ({ event }) => {
-    const { data } = event;
+    const { userId, email, name, image } = event.data;
 
     try {
-      console.log(`👤 Creating user: ${data.id}`);
+      console.log(`👤 Processing new user: ${name} (${email})`);
 
-      const firstName = data.first_name || "";
-      const lastName = data.last_name || "";
-      const fullName = `${firstName} ${lastName}`.trim();
-      
-      const email = data.email_addresses?.[0]?.email_address || "";
-      
-      let finalName = fullName;
-      if (!finalName) {
-        const emailUsername = email.split('@')[0] || "user";
-        finalName = emailUsername.charAt(0).toUpperCase() + emailUsername.slice(1);
-      }
-
-      if (!finalName || finalName === 'User') {
-        finalName = `User ${data.id.slice(-4)}`;
-      }
-
-      console.log(`📝 Setting user name to: "${finalName}"`);
-      console.log(`📧 User email: ${email}`);
-
-      // Create or update the user with proper names
-      const user = await prisma.user.upsert({
-        where: { id: data.id },
-        update: {
-          email: email,
-          name: finalName,
-          image: data.image_url || "",
-        },
-        create: {
-          id: data.id,
-          email: email,
-          name: finalName,
-          image: data.image_url || "",
-        },
+      // User is already created in the database by auth controller
+      // Just ensure they're added to default workspace
+      const user = await prisma.user.findUnique({
+        where: { id: userId }
       });
 
-      console.log(`✅ User created: ${user.name} (${user.email})`);
+      if (!user) {
+        console.error(`❌ User ${userId} not found in database`);
+        return;
+      }
 
-      // Find the default workspace by SLUG or NAME
+      console.log(`✅ Found user: ${user.name} (${user.email})`);
+
+      // Find or create default workspace
       const defaultWorkspace = await prisma.workspace.findFirst({
         where: { 
           OR: [
@@ -70,10 +48,9 @@ const syncUserCreation = inngest.createFunction(
       if (!defaultWorkspace) {
         console.log(`⚠️ Default workspace "${DEFAULT_WORKSPACE_NAME}" not found. Creating it...`);
         
-        // Create the default workspace if it doesn't exist
+        // Create the default workspace
         const newWorkspace = await prisma.workspace.create({
           data: {
-            id: `org_${Math.random().toString(36).substr(2, 9)}`,
             name: DEFAULT_WORKSPACE_NAME,
             slug: DEFAULT_WORKSPACE_SLUG,
             ownerId: user.id,
@@ -83,7 +60,7 @@ const syncUserCreation = inngest.createFunction(
         
         console.log(`✅ Created default workspace: ${newWorkspace.id}`);
         
-        // Add user to the newly created workspace as ADMIN
+        // Add user as ADMIN to their own workspace
         await prisma.workspaceMember.create({
           data: {
             userId: user.id,
@@ -94,7 +71,7 @@ const syncUserCreation = inngest.createFunction(
         console.log(`✅ Added ${user.name} as ADMIN to newly created default workspace`);
         
       } else {
-        console.log(`✅ Found existing default workspace: ${defaultWorkspace.name} (ID: ${defaultWorkspace.id})`);
+        console.log(`✅ Found existing default workspace: ${defaultWorkspace.name}`);
         
         // Check if user already in the default workspace
         const existingMembership = await prisma.workspaceMember.findFirst({
@@ -118,228 +95,155 @@ const syncUserCreation = inngest.createFunction(
         }
       }
     } catch (error) {
-      console.error("❌ Error creating user:", error);
-      
-      // Log specific Prisma errors for better debugging
-      if (error.code === 'P2002') {
-        console.error('🔑 Unique constraint violation - user might already exist');
-      } else if (error.code === 'P2025') {
-        console.error('❌ Record not found');
-      }
-    }
-  }
-);
-
-// User deletion
-const syncUserDeletion = inngest.createFunction(
-  { id: "delete-user-from-clerk" },
-  { event: "clerk/user.deleted" },
-  async ({ event }) => {
-    const { data } = event;
-
-    try {
-      await prisma.user.delete({
-        where: { id: data.id },
-      });
-      console.log(`✅ User deleted: ${data.id}`);
-    } catch (error) {
-      console.error("❌ Error deleting user:", error);
-    }
-  }
-);
-
-// User update
-const syncUserUpdation = inngest.createFunction(
-  { id: "update-user-from-clerk" },
-  { event: "clerk/user.updated" },
-  async ({ event }) => {
-    const { data } = event;
-
-    try {
-      await prisma.user.update({
-        where: { id: data.id },
-        data: {
-          email: data.email_addresses?.[0]?.email_address || "",
-          name: `${data.first_name || ""} ${data.last_name || ""}`.trim() || "User",
-          image: data.image_url || "",
-        },
-      });
-      console.log(`✅ User updated: ${data.id}`);
-    } catch (error) {
-      console.error("❌ Error updating user:", error);
+      console.error("❌ Error processing user registration:", error);
     }
   }
 );
 
 /* =========================================================
-   🔹 CLERK ORGANIZATION (WORKSPACE) SYNC FUNCTIONS
+   🔹 WORKSPACE INVITATION SYSTEM (CUSTOM - NO CLERK)
 ========================================================= */
 
-const syncWorkspaceCreation = inngest.createFunction(
-  { id: "sync-workspace-from-clerk" },
-  { event: "clerk/organization.created" },
-  async ({ event }) => {
-    const { data } = event;
+// Send workspace invitation email
+const sendWorkspaceInvitationEmail = inngest.createFunction(
+  { id: "send-workspace-invitation-mail" },
+  { event: "app/workspace.invitation" },
+  async ({ event, step }) => {
+    const { workspaceId, inviteeEmail, inviterName, origin, role } = event.data;
 
     try {
-      console.log(`🏢 Creating workspace: ${data.name}`);
-
-      const existingWorkspace = await prisma.workspace.findUnique({
-        where: { id: data.id },
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        include: { owner: true },
       });
 
-      if (existingWorkspace) {
-        console.log(`ℹ️ Workspace ${data.id} already exists`);
+      if (!workspace) {
+        console.error(`❌ Workspace not found: ${workspaceId}`);
         return;
       }
 
-      // 🚫 REMOVED: Fake user creation - only proceed if owner exists
-      const ownerUser = await prisma.user.findUnique({
-        where: { id: data.created_by },
+      console.log(`📧 Sending workspace invitation to: ${inviteeEmail}`);
+
+      // Check if user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email: inviteeEmail }
       });
 
-      if (!ownerUser) {
-        console.log(`❌ Owner user ${data.created_by} not found. Cannot create workspace.`);
-        return;
-      }
-
-      // Create workspace
-      const workspace = await prisma.workspace.create({
-        data: {
-          id: data.id,
-          name: data.name,
-          slug: data.slug,
-          ownerId: data.created_by,
-          image_url: data.image_url || "",
-        },
-      });
-
-      // Add creator as admin
-      await prisma.workspaceMember.create({
-        data: {
-          userId: data.created_by,
-          workspaceId: data.id,
-          role: "ADMIN",
-        },
-      });
-
-      console.log(`✅ Created workspace: ${workspace.name}`);
-    } catch (error) {
-      console.error("❌ Error creating workspace:", error);
-    }
-  }
-);
-
-// Workspace update
-const syncWorkspaceUpdation = inngest.createFunction(
-  { id: "update-workspace-from-clerk" },
-  { event: "clerk/organization.updated" },
-  async ({ event }) => {
-    const { data } = event;
-
-    try {
-      const existingWorkspace = await prisma.workspace.findUnique({
-        where: { id: data.id },
-      });
-
-      if (!existingWorkspace) {
-        console.log(`⚠️ Workspace not found, checking if owner exists`);
-        
-        // 🚫 REMOVED: Auto-creation without owner check
-        const ownerUser = await prisma.user.findUnique({
-          where: { id: data.created_by },
-        });
-
-        if (!ownerUser) {
-          console.log(`❌ Owner user ${data.created_by} not found. Cannot create workspace.`);
-          return;
-        }
-
-        await prisma.workspace.create({
-          data: {
-            id: data.id,
-            name: data.name,
-            slug: data.slug,
-            ownerId: data.created_by,
-          },
-        });
-        console.log(`✅ Created missing workspace: ${data.name}`);
+      let signupUrl;
+      if (existingUser) {
+        // User exists - direct login URL
+        signupUrl = `${origin}/login?redirect=workspace&workspaceId=${workspaceId}`;
       } else {
-        await prisma.workspace.update({
-          where: { id: data.id },
-          data: {
-            name: data.name,
-            slug: data.slug,
-            image_url: data.image_url || "",
-          },
-        });
-        console.log(`✅ Workspace updated: ${data.name}`);
+        // New user - registration URL
+        signupUrl = `${origin}/register?email=${encodeURIComponent(inviteeEmail)}&workspaceId=${workspaceId}`;
       }
+
+      await sendEmail({
+        to: inviteeEmail,
+        subject: `You've been invited to join ${workspace.name}`,
+        body: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #333; margin-bottom: 10px;">🏢 Workspace Invitation</h1>
+            <p style="color: #666; font-size: 16px;">You've been invited to join ${workspace.name}</p>
+          </div>
+
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 25px;">
+            <h2 style="color: #007bff; margin: 0 0 15px 0;">${workspace.name}</h2>
+            
+            <div style="margin: 15px 0;">
+              <p style="color: #555; margin: 0; line-height: 1.5;">
+                <strong>${inviterName}</strong> has invited you to join as a <strong>${role}</strong>.
+              </p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+              <div>
+                <strong style="color: #333; display: block;">Invited By</strong>
+                <span style="color: #666;">${inviterName}</span>
+              </div>
+              <div>
+                <strong style="color: #333; display: block;">Your Role</strong>
+                <span style="color: #666; text-transform: capitalize;">${role.toLowerCase()}</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <p style="color: #666; margin-bottom: 15px;">
+              Click the button below to ${existingUser ? 'login' : 'create your account'} and join the workspace:
+            </p>
+            <a href="${signupUrl}" 
+              style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+              ${existingUser ? 'Login & Join' : 'Create Account & Join'}
+            </a>
+          </div>
+
+          <div style="border-top: 1px solid #e0e0e0; padding-top: 20px; text-align: center;">
+            <p style="color: #999; font-size: 12px; margin: 0;">
+              This invitation will expire in 7 days. If you received this by mistake, please ignore this email.
+            </p>
+          </div>
+        </div>`, 
+      });
+
+      console.log(`✅ Workspace invitation email sent to: ${inviteeEmail}`);
     } catch (error) {
-      console.error("❌ Error updating workspace:", error);
+      console.error("❌ Error sending workspace invitation email:", error);
     }
   }
 );
 
-// Workspace deletion
-const syncWorkspaceDeletion = inngest.createFunction(
-  { id: "delete-workspace-with-clerk" },
-  { event: "clerk/organization.deleted" },
+// Process workspace invitation acceptance
+const processWorkspaceInvitation = inngest.createFunction(
+  { id: "process-workspace-invitation" },
+  { event: "app/workspace.invitation.accepted" },
   async ({ event }) => {
-    const { data } = event;
-    try {
-      await prisma.workspace.delete({ where: { id: data.id } });
-      console.log(`✅ Deleted workspace: ${data.id}`);
-    } catch (error) {
-      console.error("❌ Error deleting workspace:", error);
-    }
-  }
-);
-
-// Add member to workspace after invitation accepted
-const syncWorkspaceMemberCreation = inngest.createFunction(
-  { id: "sync-workspace-member-from-clerk" },
-  { event: "clerk/organizationInvitation.accepted" },
-  async ({ event }) => {
-    const { data } = event;
+    const { userId, workspaceId, role } = event.data;
 
     try {
-      console.log(`👥 Adding user to workspace: ${data.user_id} to ${data.organization_id}`);
+      console.log(`👥 Adding user to workspace: ${userId} to ${workspaceId}`);
 
-      // 🚫 REMOVED: Fake user creation - only proceed if user exists
       const user = await prisma.user.findUnique({ 
-        where: { id: data.user_id } 
+        where: { id: userId } 
       });
 
       if (!user) {
-        console.log(`❌ User ${data.user_id} not found in database. Cannot add to workspace.`);
+        console.log(`❌ User ${userId} not found in database.`);
         return;
       }
 
-      console.log(`✅ Found existing user: ${user.name} (${user.email})`);
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId }
+      });
+
+      if (!workspace) {
+        console.log(`❌ Workspace ${workspaceId} not found.`);
+        return;
+      }
 
       // Add user to workspace
       await prisma.workspaceMember.create({
         data: {
-          userId: data.user_id,
-          workspaceId: data.organization_id,
-          role: String(data.role).toUpperCase() || "MEMBER",
+          userId: userId,
+          workspaceId: workspaceId,
+          role: role || "MEMBER",
         },
       });
 
-      console.log(`✅ Added ${user.name} to workspace ${data.organization_id} as ${data.role}`);
+      console.log(`✅ Added ${user.name} to workspace ${workspace.name} as ${role}`);
 
     } catch (error) {
       console.error("❌ Error adding workspace member:", error);
+      if (error.code === 'P2002') {
+        console.log('ℹ️ User already in workspace');
+      }
     }
   }
 );
 
-// 🚫 REMOVED COMPLETELY: syncUserFromInvitation function
-// This function was creating fake users with @temp.com emails
-
 /* =========================================================
-   🔹 INNGEST FUNCTION TO SEND EMAIL ON TASK CREATION
+   🔹 EMAIL NOTIFICATION FUNCTIONS (UNCHANGED - STILL WORK)
 ========================================================= */
 
 const sendTaskAssignmentEmail = inngest.createFunction(
@@ -399,7 +303,7 @@ const sendTaskAssignmentEmail = inngest.createFunction(
           <p style="font-size: 18px; font-weight: bold; color: #007bff; margin: 8px 0;">${task.title}</p>
           <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
             <p style="margin: 6px 0;"><strong>Description:</strong> ${task.description || 'No description provided'}</p>
-            <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
+            <p style="margin: 6px 0;"><strong>Due Date:</strong> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Not set'}</p>
             <p style="margin: 6px 0;"><strong>Priority:</strong> ${task.priority}</p>
             <p style="margin: 6px 0;"><strong>Status:</strong> ${task.status}</p>
             <p style="margin: 6px 0;"><strong>Type:</strong> ${task.type}</p>
@@ -416,154 +320,70 @@ const sendTaskAssignmentEmail = inngest.createFunction(
     });
 
     // Schedule reminder if due date is in the future
-    const dueDate = new Date(task.due_date);
-    const today = new Date();
-    
-    if (dueDate > today) {
-      // Sleep until due date
-      await step.sleepUntil('wait-for-due-date', dueDate);
+    if (task.due_date) {
+      const dueDate = new Date(task.due_date);
+      const today = new Date();
+      
+      if (dueDate > today) {
+        // Sleep until due date
+        await step.sleepUntil('wait-for-due-date', dueDate);
 
-      await step.run('check-if-task-is-completed', async () => {
-        const updatedTask = await prisma.task.findUnique({
-          where: { id: taskId },
-          select: {
-            status: true,
-            title: true,
-            due_date: true,
-            description: true,
-            type: true,
-            project: {
-              include: {
-                workspace: {
-                  select: {
-                    name: true
+        await step.run('check-if-task-is-completed', async () => {
+          const updatedTask = await prisma.task.findUnique({
+            where: { id: taskId },
+            select: {
+              status: true,
+              title: true,
+              due_date: true,
+              description: true,
+              type: true,
+              project: {
+                include: {
+                  workspace: {
+                    select: {
+                      name: true
+                    }
                   }
                 }
               }
             }
-          }
-        });
-
-        if (!updatedTask || updatedTask.status === "DONE" || updatedTask.status === "CANCELLED") {
-          console.log(`Task ${taskId} is completed or cancelled, skipping reminder`);
-          return;
-        }
-
-        // Send reminder email
-        await step.run('send-reminder-email', async () => {
-          await sendEmail({
-            to: assignment.user.email,
-            subject: `Reminder: Task Due Today - ${updatedTask.project.name}`,
-            body: `<div style="max-width: 600px;">
-              <h2>Hi ${assignment.user.name},</h2>
-              <p style="font-size: 16px;">You have a task due today in <strong>${updatedTask.project.workspace.name}</strong> → <strong>${updatedTask.project.name}</strong>:</p>
-              <p style="font-size: 18px; font-weight: bold; color: #dc3545; margin: 8px 0;">${updatedTask.title}</p>
-              <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
-                <p style="margin: 6px 0;"><strong>Description:</strong> ${updatedTask.description || 'No description provided'}</p>
-                <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(updatedTask.due_date).toLocaleDateString()} <strong>(TODAY)</strong></p>
-                <p style="margin: 6px 0;"><strong>Status:</strong> ${updatedTask.status}</p>
-                <p style="margin: 6px 0;"><strong>Type:</strong> ${updatedTask.type}</p>
-              </div>
-              <a href="${origin}/taskDetails?projectId=${updatedTask.project.id}&taskId=${taskId}" style="background-color: #dc3545; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
-                View Task
-              </a>
-              <p style="margin-top: 20px; font-size: 14px; color: #6c757d;">
-                This task is due today. Please complete it as soon as possible.
-              </p>
-            </div>`
           });
-          console.log(`✅ Reminder email sent to ${assignment.user.email} for task ${taskId}`);
+
+          if (!updatedTask || updatedTask.status === "DONE" || updatedTask.status === "CANCELLED") {
+            console.log(`Task ${taskId} is completed or cancelled, skipping reminder`);
+            return;
+          }
+
+          // Send reminder email
+          await step.run('send-reminder-email', async () => {
+            await sendEmail({
+              to: assignment.user.email,
+              subject: `Reminder: Task Due Today - ${updatedTask.project.name}`,
+              body: `<div style="max-width: 600px;">
+                <h2>Hi ${assignment.user.name},</h2>
+                <p style="font-size: 16px;">You have a task due today in <strong>${updatedTask.project.workspace.name}</strong> → <strong>${updatedTask.project.name}</strong>:</p>
+                <p style="font-size: 18px; font-weight: bold; color: #dc3545; margin: 8px 0;">${updatedTask.title}</p>
+                <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 30px;">
+                  <p style="margin: 6px 0;"><strong>Description:</strong> ${updatedTask.description || 'No description provided'}</p>
+                  <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(updatedTask.due_date).toLocaleDateString()} <strong>(TODAY)</strong></p>
+                  <p style="margin: 6px 0;"><strong>Status:</strong> ${updatedTask.status}</p>
+                  <p style="margin: 6px 0;"><strong>Type:</strong> ${updatedTask.type}</p>
+                </div>
+                <a href="${origin}/taskDetails?projectId=${updatedTask.project.id}&taskId=${taskId}" style="background-color: #dc3545; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
+                  View Task
+                </a>
+                <p style="margin-top: 20px; font-size: 14px; color: #6c757d;">
+                  This task is due today. Please complete it as soon as possible.
+                </p>
+              </div>`
+            });
+            console.log(`✅ Reminder email sent to ${assignment.user.email} for task ${taskId}`);
+          });
         });
-      });
-    }
-  }
-);
-
-/* =========================================================
-   🔹 INNGEST FUNCTION TO SEND WORKSPACE INVITATION EMAIL
-========================================================= */
-
-const sendWorkspaceInvitationEmail = inngest.createFunction(
-  { id: "send-workspace-invitation-mail" },
-  { event: "app/workspace.invitation" },
-  async ({ event, step }) => {
-    const { workspaceId, inviteeEmail, inviterName, origin, role } = event.data;
-
-    try {
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        include: { owner: true },
-      });
-
-      if (!workspace) {
-        console.error(`❌ Workspace not found: ${workspaceId}`);
-        return;
       }
-
-      console.log(`📧 Sending workspace invitation to: ${inviteeEmail}`);
-
-      // Use Clerk's sign-up URL with redirect to your app
-      const clerkSignUpUrl = `https://accounts.tbbasco.com/sign-up?redirect_url=${encodeURIComponent(origin)}`;
-
-      await sendEmail({
-        to: inviteeEmail,
-        subject: `You've been invited to join ${workspace.name}`,
-        body: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #333; margin-bottom: 10px;">🏢 Workspace Invitation</h1>
-            <p style="color: #666; font-size: 16px;">You've been invited to join ${workspace.name}</p>
-          </div>
-
-          <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 25px;">
-            <h2 style="color: #007bff; margin: 0 0 15px 0;">${workspace.name}</h2>
-            
-            <div style="margin: 15px 0;">
-              <p style="color: #555; margin: 0; line-height: 1.5;">
-                <strong>${inviterName}</strong> has invited you to join as a <strong>${role}</strong>.
-              </p>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
-              <div>
-                <strong style="color: #333; display: block;">Invited By</strong>
-                <span style="color: #666;">${inviterName}</span>
-              </div>
-              <div>
-                <strong style="color: #333; display: block;">Your Role</strong>
-                <span style="color: #666; text-transform: capitalize;">${role.toLowerCase()}</span>
-              </div>
-            </div>
-          </div>
-
-          <div style="text-align: center; margin: 30px 0;">
-            <p style="color: #666; margin-bottom: 15px;">
-              Click the button below to create your account and join the workspace:
-            </p>
-            <a href="${clerkSignUpUrl}" 
-              style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-              Create Account & Join
-            </a>
-          </div>
-
-          <div style="border-top: 1px solid #e0e0e0; padding-top: 20px; text-align: center;">
-            <p style="color: #999; font-size: 12px; margin: 0;">
-              This invitation will expire in 7 days. If you received this by mistake, please ignore this email.
-            </p>
-          </div>
-        </div>`, 
-      });
-
-      console.log(`✅ Workspace invitation email sent to: ${inviteeEmail}`);
-    } catch (error) {
-      console.error("❌ Error sending workspace invitation email:", error);
     }
   }
 );
-
-/* =========================================================
-   🔹 TASK UPDATES AND COMMENTS EMAIL FUNCTIONS
-========================================================= */
 
 const sendTaskStatusUpdateEmail = inngest.createFunction(
   { id: "send-task-status-update-mail" },
@@ -695,7 +515,7 @@ const sendNewCommentEmail = inngest.createFunction(
               <div style="border: 1px solid #ddd; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px;">
                 <p style="margin: 6px 0;"><strong>Task Status:</strong> ${task.status}</p>
                 <p style="margin: 6px 0;"><strong>Task Type:</strong> ${task.type}</p>
-                <p style="margin: 6px 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
+                <p style="margin: 6px 0;"><strong>Due Date:</strong> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Not set'}</p>
               </div>
               <a href="${origin}/taskDetails?projectId=${task.projectId}&taskId=${taskId}" style="background-color: #007bff; padding: 12px 24px; border-radius: 5px; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none;">
                 View Task & Reply
@@ -717,16 +537,13 @@ const sendNewCommentEmail = inngest.createFunction(
 ========================================================= */
 
 export const functions = [
-  syncUserCreation,
-  syncUserDeletion,
-  syncUserUpdation,
-  syncWorkspaceCreation,
-  syncWorkspaceUpdation,
-  syncWorkspaceDeletion,
-  syncWorkspaceMemberCreation,
-  // 🚫 REMOVED: syncUserFromInvitation - no more fake users
+  // Custom auth functions
+  syncUserCreation,                    // User registration
+  sendWorkspaceInvitationEmail,        // Invite team members
+  processWorkspaceInvitation,          // Accept invitations
+  
+  // Email notification functions (unchanged)
   sendTaskAssignmentEmail,
-  sendWorkspaceInvitationEmail,
   sendTaskStatusUpdateEmail,
   sendNewCommentEmail,
 ];
