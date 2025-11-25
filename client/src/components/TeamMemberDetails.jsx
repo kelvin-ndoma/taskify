@@ -1,6 +1,6 @@
 // pages/TeamMemberDetails.jsx
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import { 
@@ -12,29 +12,22 @@ import {
   Clock,
   CheckCircle2,
   PlayCircle,
-  AlertCircle,
-  Circle,
-  ExternalLink
+  AlertCircle
 } from "lucide-react";
 import api from "../configs/api";
-import toast from "react-hot-toast";
 
 const TeamMemberDetails = () => {
   const { memberId } = useParams();
-  const navigate = useNavigate();
   const [assignedTasks, setAssignedTasks] = useState([]);
-  const [memberInfo, setMemberInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
   
   const currentWorkspace = useSelector((state) => state?.workspace?.currentWorkspace);
   const { getToken } = useAuth();
-  const { user: currentUser } = useUser();
-
-  // Find team member from workspace data
+  
   const teamMember = currentWorkspace?.members?.find(member => 
     member.user.id === memberId
-  ) || memberInfo;
+  );
 
   useEffect(() => {
     if (memberId && currentWorkspace) {
@@ -47,17 +40,15 @@ const TeamMemberDetails = () => {
       setLoading(true);
       const token = await getToken();
       
-      // Use the new team API endpoint
+      // You'll need to create this API endpoint
       const response = await api.get(
-        `/api/team/${currentWorkspace.id}/members/${memberId}/tasks`,
+        `/api/workspaces/${currentWorkspace.id}/members/${memberId}/tasks`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
       setAssignedTasks(response.data.tasks || []);
-      setMemberInfo(response.data.member);
     } catch (error) {
       console.error('Error fetching member tasks:', error);
-      toast.error(error.response?.data?.message || 'Failed to load tasks');
     } finally {
       setLoading(false);
     }
@@ -95,7 +86,7 @@ const TeamMemberDetails = () => {
       case 'INTERNAL_REVIEW':
         return <AlertCircle className="w-4 h-4 text-orange-500" />;
       default:
-        return <Circle className="w-4 h-4 text-gray-400" />;
+        return <FileText className="w-4 h-4 text-gray-500" />;
     }
   };
 
@@ -110,16 +101,6 @@ const TeamMemberDetails = () => {
       default:
         return 'text-gray-500 bg-gray-100 dark:bg-gray-500/10';
     }
-  };
-
-  const handleTaskClick = (task) => {
-    // Navigate to task details page
-    navigate(`/taskDetails?taskId=${task.id}`);
-  };
-
-  const handleProjectClick = (projectId) => {
-    // Navigate to project details
-    navigate(`/projectsDetail?projectId=${projectId}`);
   };
 
   if (loading) {
@@ -160,12 +141,10 @@ const TeamMemberDetails = () => {
     );
   }
 
-  const isCurrentUser = teamMember.user?.id === currentUser?.id;
-
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link 
             to="/team" 
@@ -174,30 +153,21 @@ const TeamMemberDetails = () => {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <img 
-                src={teamMember.user?.image || ''} 
-                alt={teamMember.user?.name}
-                className="w-12 h-12 rounded-full bg-gray-200 dark:bg-zinc-800 object-cover"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
-              />
-              {!teamMember.user?.image && (
-                <div className="w-12 h-12 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white font-medium text-lg">
-                  {teamMember.user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-              )}
-            </div>
+            <img 
+              src={teamMember.user.image || ''} 
+              alt={teamMember.user.name}
+              className="w-12 h-12 rounded-full bg-gray-200 dark:bg-zinc-800"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling?.style.display = 'flex';
+              }}
+            />
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">
-                {teamMember.user?.name}
-                {isCurrentUser && (
-                  <span className="text-sm text-blue-500 ml-2">(You)</span>
-                )}
+                {teamMember.user.name}
               </h1>
               <p className="text-gray-500 dark:text-zinc-400">
-                {teamMember.user?.email}
+                {teamMember.user.email}
               </p>
             </div>
           </div>
@@ -248,30 +218,24 @@ const TeamMemberDetails = () => {
               No Assigned Tasks
             </h3>
             <p className="text-gray-500 dark:text-zinc-400">
-              {isCurrentUser ? "You don't" : `${teamMember.user?.name} doesn't`} have any assigned tasks in this workspace.
+              {teamMember.user.name} doesn't have any assigned tasks in this workspace.
             </p>
           </div>
         ) : (
           Object.entries(groupedTasks).map(([projectId, { project, folders }]) => (
-            <div key={projectId} className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+            <div key={projectId} className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-lg">
               {/* Project Header */}
-              <div className="p-4 border-b border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Folder className="w-5 h-5 text-blue-500" />
-                    <div>
-                      <button
-                        onClick={() => handleProjectClick(projectId)}
-                        className="font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left"
-                      >
-                        {project?.name || 'Unknown Project'}
-                      </button>
-                      <p className="text-sm text-gray-500 dark:text-zinc-400">
-                        {Object.values(folders).flatMap(f => f.tasks).length} tasks
-                      </p>
-                    </div>
+              <div className="p-4 border-b border-gray-200 dark:border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <Folder className="w-5 h-5 text-blue-500" />
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                      {project?.name || 'Unknown Project'}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-zinc-400">
+                      {Object.values(folders).flatMap(f => f.tasks).length} tasks
+                    </p>
                   </div>
-                  <ExternalLink className="w-4 h-4 text-gray-400" />
                 </div>
               </div>
 
@@ -283,7 +247,7 @@ const TeamMemberDetails = () => {
                     {folder && (
                       <div className="flex items-center gap-2 mb-3 text-sm text-gray-500 dark:text-zinc-400">
                         <Folder className="w-4 h-4" />
-                        <span className="font-medium">{folder.name}</span>
+                        <span>{folder.name}</span>
                         <span>•</span>
                         <span>{tasks.length} tasks</span>
                       </div>
@@ -294,8 +258,8 @@ const TeamMemberDetails = () => {
                       {tasks.map(task => (
                         <div
                           key={task.id}
-                          className="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-lg cursor-pointer transition-colors group"
-                          onClick={() => handleTaskClick(task)}
+                          className="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-lg cursor-pointer transition-colors"
+                          onClick={() => setSelectedTask(task)}
                         >
                           <div className="flex-shrink-0">
                             {getStatusIcon(task.status)}
@@ -303,7 +267,7 @@ const TeamMemberDetails = () => {
                           
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                              <h4 className="font-medium text-gray-900 dark:text-white truncate">
                                 {task.title}
                               </h4>
                               <span className={`px-2 py-1 text-xs rounded-full ${getPriorityColor(task.priority)}`}>
@@ -322,12 +286,6 @@ const TeamMemberDetails = () => {
                                 <Clock className="w-3 h-3" />
                                 {new Date(task.createdAt).toLocaleDateString()}
                               </div>
-                              {task._count?.comments > 0 && (
-                                <div className="flex items-center gap-1">
-                                  <FileText className="w-3 h-3" />
-                                  {task._count.comments} comments
-                                </div>
-                              )}
                             </div>
                           </div>
 
@@ -351,6 +309,74 @@ const TeamMemberDetails = () => {
           ))
         )}
       </div>
+
+      {/* Task Detail Modal */}
+      {selectedTask && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Task Details
+                </h3>
+                <button
+                  onClick={() => setSelectedTask(null)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">
+                    {selectedTask.title}
+                  </h4>
+                  <p className="text-gray-600 dark:text-zinc-300">
+                    {selectedTask.description || 'No description provided.'}
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500 dark:text-zinc-400">Status:</span>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      {selectedTask.status.replace('_', ' ')}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 dark:text-zinc-400">Priority:</span>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      {selectedTask.priority}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 dark:text-zinc-400">Project:</span>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      {selectedTask.project?.name}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 dark:text-zinc-400">Folder:</span>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      {selectedTask.folder?.name || 'No Folder'}
+                    </div>
+                  </div>
+                </div>
+                
+                {selectedTask.due_date && (
+                  <div>
+                    <span className="text-gray-500 dark:text-zinc-400">Due Date:</span>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      {new Date(selectedTask.due_date).toLocaleDateString()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
