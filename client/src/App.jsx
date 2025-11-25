@@ -7,6 +7,7 @@ import Team from "./pages/Team";
 import ProjectDetails from "./pages/ProjectDetails";
 import TaskDetails from "./pages/TaskDetails";
 import { SignIn, SignUp } from "@clerk/clerk-react";
+import TeamMemberDetails from "./components/TeamMemberDetails";
 
 const App = () => {
     return (
@@ -35,9 +36,11 @@ const App = () => {
                 <Route path="/*" element={<Layout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="team" element={<Team />} />
+                    <Route path="team/:memberId" element={<TeamMemberDetails />} />         
                     <Route path="projects" element={<Projects />} />
                     <Route path="projectsDetail" element={<ProjectDetails />} />
                     <Route path="taskDetails" element={<TaskDetails />} />
+
                 </Route>
             </Routes>
         </>

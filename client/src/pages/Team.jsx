@@ -1,5 +1,7 @@
+// pages/Team.jsx
 import { useEffect, useState } from "react";
-import { UsersIcon, Search, UserPlus, Shield, Activity, Trash2, MoreVertical, ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { UsersIcon, Search, UserPlus, Shield, Activity, Trash2, ChevronDown } from "lucide-react";
 import InviteMemberDialog from "../components/InviteMemberDialog";
 import { useSelector } from "react-redux";
 import { useUser, useAuth } from "@clerk/clerk-react";
@@ -7,12 +9,12 @@ import api from "../configs/api";
 import toast from "react-hot-toast";
 
 const Team = () => {
+    const navigate = useNavigate();
     const [tasks, setTasks] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [users, setUsers] = useState([]);
     const [loadingStates, setLoadingStates] = useState({});
-    const [showMenu, setShowMenu] = useState(null);
     const [showRoleMenu, setShowRoleMenu] = useState(null);
     
     const currentWorkspace = useSelector((state) => state?.workspace?.currentWorkspace || null);
@@ -30,6 +32,11 @@ const Team = () => {
         setUsers(currentWorkspace?.members || []);
         setTasks(currentWorkspace?.projects?.reduce((acc, project) => [...acc, ...project.tasks], []) || []);
     }, [currentWorkspace]);
+
+    // 🆕 Navigate to member details
+    const handleMemberClick = (member) => {
+        navigate(`/team/${member.user.id}`);
+    };
 
     // 🆕 Check if current user is workspace admin/owner
     const isCurrentUserAdmin = () => {
@@ -67,12 +74,11 @@ const Team = () => {
         }
 
         setLoadingStates(prev => ({ ...prev, [member.id]: true }));
-        setShowMenu(null);
+        setShowRoleMenu(null);
 
         try {
             const token = await getToken();
             
-            // 🆕 API call to remove member from workspace
             const response = await api.delete(
                 `/api/workspaces/${currentWorkspace.id}/members/${member.user.id}`,
                 {
@@ -101,7 +107,6 @@ const Team = () => {
             
             const token = await getToken();
             
-            // 🛠️ FIX: Use PATCH method instead of PUT
             await api.patch(
                 `/api/workspaces/${currentWorkspace.id}/members/${member.user.id}/role`,
                 { role: newRole },
@@ -134,7 +139,6 @@ const Team = () => {
     const UserAvatar = ({ user, size = "md" }) => {
         const safeImage = getSafeImageUrl(user?.image);
         
-        // Size mappings for consistent sizing
         const sizeClasses = {
             sm: "w-6 h-6 text-xs",
             md: "w-8 h-8 text-sm",
@@ -151,11 +155,7 @@ const Team = () => {
                     alt={user?.name || "User"}
                     className={`${sizeClass} rounded-full bg-gray-200 dark:bg-zinc-800 object-cover`}
                     onError={(e) => {
-                        const target = e.target;
-                        target.style.display = 'none';
-                        if (target.nextSibling) {
-                            target.nextSibling.style.display = 'flex';
-                        }
+                        e.target.style.display = 'none';
                     }}
                 />
             );
@@ -192,7 +192,10 @@ const Team = () => {
                 {canChangeRole ? (
                     <div className="relative">
                         <button
-                            onClick={() => setShowRoleMenu(showRoleMenu === member.id ? null : member.id)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowRoleMenu(showRoleMenu === member.id ? null : member.id);
+                            }}
                             disabled={loadingStates[member.id]}
                             className={`px-2 py-1 text-xs rounded-md font-medium flex items-center gap-1 ${
                                 member.role === "ADMIN"
@@ -213,13 +216,19 @@ const Team = () => {
                         {showRoleMenu === member.id && (
                             <div className="absolute top-full left-0 mt-1 w-24 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-md shadow-lg z-10">
                                 <button
-                                    onClick={() => handleUpdateRole(member, "ADMIN")}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateRole(member, "ADMIN");
+                                    }}
                                     className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-zinc-700 first:rounded-t-md last:rounded-b-md"
                                 >
                                     ADMIN
                                 </button>
                                 <button
-                                    onClick={() => handleUpdateRole(member, "MEMBER")}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateRole(member, "MEMBER");
+                                    }}
                                     className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-zinc-700 first:rounded-t-md last:rounded-b-md"
                                 >
                                     MEMBER
@@ -362,7 +371,8 @@ const Team = () => {
                                     {filteredUsers.map((member) => (
                                         <tr
                                             key={member.id}
-                                            className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors"
+                                            className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                                            onClick={() => handleMemberClick(member)}
                                         >
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
@@ -389,7 +399,10 @@ const Team = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-zinc-400">
                                                     {canRemoveUser(member) && (
                                                         <button
-                                                            onClick={() => handleRemoveMember(member)}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleRemoveMember(member, e);
+                                                            }}
                                                             disabled={loadingStates[member.id]}
                                                             className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                         >
@@ -414,7 +427,8 @@ const Team = () => {
                             {filteredUsers.map((member) => (
                                 <div
                                     key={member.id}
-                                    className="p-4 border border-gray-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors"
+                                    className="p-4 border border-gray-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                                    onClick={() => handleMemberClick(member)}
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center gap-3 flex-1">
@@ -439,7 +453,10 @@ const Team = () => {
                                         
                                         {isCurrentUserAdmin() && canRemoveUser(member) && (
                                             <button
-                                                onClick={() => handleRemoveMember(member)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRemoveMember(member, e);
+                                                }}
                                                 disabled={loadingStates[member.id]}
                                                 className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 ml-2"
                                                 title="Remove from workspace"
