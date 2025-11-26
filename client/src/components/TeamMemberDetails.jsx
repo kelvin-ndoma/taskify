@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { useUser, useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import { 
   ArrowLeft, 
   Calendar, 
@@ -28,8 +28,7 @@ const TeamMemberDetails = () => {
   const [selectedTask, setSelectedTask] = useState(null);
   
   const currentWorkspace = useSelector((state) => state?.workspace?.currentWorkspace);
-  const { getToken } = useAuth();
-  const { user: currentUser } = useUser();
+  const { user: currentUser, getToken } = useAuth();
 
   // Find team member from workspace data
   const teamMember = currentWorkspace?.members?.find(member => 
@@ -45,7 +44,7 @@ const TeamMemberDetails = () => {
   const fetchMemberTasks = async () => {
     try {
       setLoading(true);
-      const token = await getToken();
+      const token = getToken();
       
       // Use the new team API endpoint
       const response = await api.get(
@@ -122,6 +121,26 @@ const TeamMemberDetails = () => {
     navigate(`/projectsDetail?projectId=${projectId}`);
   };
 
+  // Get user avatar content
+  const getUserAvatar = (user) => {
+    if (user?.image) {
+      return (
+        <img 
+          src={user.image} 
+          alt={user.name}
+          className="w-12 h-12 rounded-full bg-gray-200 dark:bg-zinc-800 object-cover"
+        />
+      );
+    }
+    
+    // Return fallback avatar with initial
+    return (
+      <div className="w-12 h-12 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white font-medium text-lg">
+        {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto p-6">
@@ -175,19 +194,7 @@ const TeamMemberDetails = () => {
           </Link>
           <div className="flex items-center gap-4">
             <div className="relative">
-              <img 
-                src={teamMember.user?.image || ''} 
-                alt={teamMember.user?.name}
-                className="w-12 h-12 rounded-full bg-gray-200 dark:bg-zinc-800 object-cover"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
-              />
-              {!teamMember.user?.image && (
-                <div className="w-12 h-12 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white font-medium text-lg">
-                  {teamMember.user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-              )}
+              {getUserAvatar(teamMember.user)}
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">

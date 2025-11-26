@@ -5,7 +5,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ExternalLinkIcon } from "lucide-react";
-import { useAuth, useUser } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext"; // Replace Clerk import
 import api from "../configs/api";
 import { fetchWorkspaces } from "../features/workspaceSlice";
 import CommentsSection from "../components/CommentsSection";
@@ -16,8 +16,7 @@ const TaskDetails = () => {
   const projectId = searchParams.get("projectId");
   const taskId = searchParams.get("taskId");
 
-  const { user } = useUser();
-  const { getToken } = useAuth();
+  const { user, getToken } = useAuth(); // Use custom auth
   const dispatch = useDispatch();
 
   const [task, setTask] = useState(null);
@@ -111,7 +110,7 @@ const TaskDetails = () => {
         setCommentsLoading(true);
       }
       
-      const token = await getToken();
+      const token = getToken(); // No await needed
       if (!token) {
         console.warn("No valid token available for fetching comments.");
         if (!silent) setCommentsLoading(false);
@@ -147,7 +146,7 @@ const TaskDetails = () => {
   // FIXED: Function to fetch workspace members
   const fetchWorkspaceMembers = async () => {
     try {
-      const token = await getToken();
+      const token = getToken(); // No await needed
       const workspaceId = currentWorkspace?.id;
       
       if (!workspaceId) {
@@ -193,7 +192,7 @@ const TaskDetails = () => {
     }
 
     try {
-      const token = await getToken();
+      const token = getToken(); // No await needed
       const { data } = await api.get(`/api/tasks/${taskId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -368,7 +367,7 @@ const TaskDetails = () => {
   const handleUpdateTask = async () => {
     try {
       setTaskLoading(true);
-      const token = await getToken();
+      const token = getToken(); // No await needed
       
       console.log("🔄 Updating task with data:", editingTaskData);
       
@@ -403,7 +402,7 @@ const TaskDetails = () => {
 
   const handleAddAssignee = async (memberId) => {
     try {
-      const token = await getToken();
+      const token = getToken(); // No await needed
       
       // Safely get current assignee IDs
       const currentAssignees = (task.assignees || [])
@@ -443,7 +442,7 @@ const TaskDetails = () => {
 
   const handleRemoveAssignee = async (memberId) => {
     try {
-      const token = await getToken();
+      const token = getToken(); // No await needed
       
       // Safely get current assignee IDs
       const currentAssignees = (task.assignees || [])
@@ -488,7 +487,7 @@ const TaskDetails = () => {
     try {
       setCommentLoading(true);
       const loadingToast = toast.loading("Adding comment...");
-      const token = await getToken();
+      const token = getToken(); // No await needed
 
       const linksData = commentLinks.map(link => ({
         url: link.url
@@ -623,7 +622,7 @@ const TaskDetails = () => {
     }
 
     try {
-      const token = await getToken();
+      const token = getToken(); // No await needed
       
       const { data } = await api.put(
         `/api/comments/${commentId}`,
@@ -658,7 +657,7 @@ const TaskDetails = () => {
     }
 
     try {
-      const token = await getToken();
+      const token = getToken(); // No await needed
       
       await api.delete(
         `/api/comments/${commentId}`,

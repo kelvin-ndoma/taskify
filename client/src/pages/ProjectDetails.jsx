@@ -16,7 +16,9 @@ import ProjectSettings from "../components/ProjectSettings";
 import CreateTaskDialog from "../components/CreateTaskDialog";
 import ProjectCalendar from "../components/ProjectCalendar";
 import ProjectTasks from "../components/ProjectTasks";
-import ProjectFolders from "../components/ProjectFolders"; // NEW
+import ProjectFolders from "../components/ProjectFolders";
+import { useAuth } from "../context/AuthContext"; // ADD THIS
+import api from "../configs/api"; // ADD THIS
 
 export default function ProjectDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -24,35 +26,64 @@ export default function ProjectDetail() {
   const id = searchParams.get("id");
 
   const navigate = useNavigate();
+  const { getToken } = useAuth(); // ADD THIS
   const projects = useSelector(
     (state) => state?.workspace?.currentWorkspace?.projects || []
   );
 
   const [project, setProject] = useState(null);
   const [tasks, setTasks] = useState([]);
-  const [folders, setFolders] = useState([]); // NEW
+  const [folders, setFolders] = useState([]);
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [activeTab, setActiveTab] = useState(tab || "tasks");
+  const [loading, setLoading] = useState(true); // ADD LOADING STATE
 
   useEffect(() => {
     if (tab) setActiveTab(tab);
   }, [tab]);
 
+  // 🆕 UPDATED: Fetch project tasks separately since Redux doesn't include them
   useEffect(() => {
-    if (projects && projects.length > 0) {
-      const proj = projects.find((p) => p.id === id);
-      setProject(proj);
-      setTasks(proj?.tasks || []);
-      setFolders(proj?.folders || []); // NEW
-    }
-  }, [id, projects]);
+    const fetchProjectData = async () => {
+      if (!id) return;
+      
+      setLoading(true);
+      try {
+        const token = getToken();
+        
+        // Fetch project with tasks and folders
+        const response = await api.get(`/api/projects/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        console.log('✅ Project data with tasks:', response.data);
+        
+        if (response.data.project) {
+          setProject(response.data.project);
+          setTasks(response.data.project.tasks || []);
+          setFolders(response.data.project.folders || []);
+        }
+      } catch (error) {
+        console.error('❌ Failed to fetch project data:', error);
+        // Fallback to Redux data if API fails
+        const proj = projects.find((p) => p.id === id);
+        if (proj) {
+          setProject(proj);
+          setTasks(proj.tasks || []);
+          setFolders(proj.folders || []);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjectData();
+  }, [id, projects, getToken]);
 
   const statusColors = {
     PLANNING: "bg-zinc-200 text-zinc-900 dark:bg-zinc-600 dark:text-zinc-200",
-    ACTIVE:
-      "bg-emerald-200 text-emerald-900 dark:bg-emerald-500 dark:text-emerald-900",
-    ON_HOLD:
-      "bg-amber-200 text-amber-900 dark:bg-amber-500 dark:text-amber-900",
+    ACTIVE: "bg-emerald-200 text-emerald-900 dark:bg-emerald-500 dark:text-emerald-900",
+    ON_HOLD: "bg-amber-200 text-amber-900 dark:bg-amber-500 dark:text-amber-900",
     COMPLETED: "bg-blue-200 text-blue-900 dark:bg-blue-500 dark:text-blue-900",
     CANCELLED: "bg-red-200 text-red-900 dark:bg-red-500 dark:text-red-900",
   };
@@ -70,8 +101,7 @@ export default function ProjectDetail() {
       completed: allTasks.filter((t) => t.status === "DONE").length,
       todo: allTasks.filter((t) => t.status === "TODO").length,
       inProgress: allTasks.filter((t) => t.status === "IN_PROGRESS").length,
-      internalReview: allTasks.filter((t) => t.status === "INTERNAL_REVIEW")
-        .length,
+      internalReview: allTasks.filter((t) => t.status === "INTERNAL_REVIEW").length,
       cancelled: allTasks.filter((t) => t.status === "CANCELLED").length,
       inProgressAndTodo: allTasks.filter(
         (t) =>
@@ -79,11 +109,23 @@ export default function ProjectDetail() {
           t.status === "TODO" ||
           t.status === "INTERNAL_REVIEW"
       ).length,
-      totalFolders: folders.length, // NEW: Folder count
+      totalFolders: folders.length,
     };
   };
 
   const taskCounts = getTaskCounts();
+
+  // 🆕 ADD LOADING STATE
+  if (loading) {
+    return (
+      <div className="p-6 text-center text-zinc-900 dark:text-zinc-200">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 dark:bg-zinc-700 rounded w-1/4 mx-auto mb-4"></div>
+          <div className="h-4 bg-gray-200 dark:bg-zinc-700 rounded w-1/2 mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
 
   if (!project) {
     return (
@@ -122,7 +164,6 @@ export default function ProjectDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* NEW: Create Folder Button */}
           <button
             onClick={() => setSearchParams({ id: id, tab: "folders" })}
             className="flex items-center gap-2 px-4 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
@@ -172,7 +213,7 @@ export default function ProjectDetail() {
             label: "Folders",
             value: taskCounts.totalFolders,
             color: "text-orange-700 dark:text-orange-400",
-          }, // NEW
+          },
           {
             label: "Team Members",
             value: project.members?.length || 0,
@@ -181,7 +222,7 @@ export default function ProjectDetail() {
         ].map((card, idx) => (
           <div
             key={idx}
-            className=" dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 flex justify-between sm:min-w-60 p-4 py-2.5 rounded"
+            className="dark:bg-gradient-to-br dark:from-zinc-800/70 dark:to-zinc-900/50 border border-zinc-200 dark:border-zinc-800 flex justify-between sm:min-w-60 p-4 py-2.5 rounded"
           >
             <div>
               <div className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -201,7 +242,7 @@ export default function ProjectDetail() {
         <div className="inline-flex flex-wrap max-sm:grid grid-cols-3 gap-2 border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
           {[
             { key: "tasks", label: "Tasks", icon: FileStackIcon },
-            { key: "folders", label: "Folders", icon: FolderIcon }, // NEW
+            { key: "folders", label: "Folders", icon: FolderIcon },
             { key: "calendar", label: "Calendar", icon: CalendarIcon },
             { key: "analytics", label: "Analytics", icon: BarChart3Icon },
             { key: "settings", label: "Settings", icon: SettingsIcon },
@@ -226,17 +267,17 @@ export default function ProjectDetail() {
 
         <div className="mt-6">
           {activeTab === "tasks" && (
-            <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
+            <div className="dark:bg-zinc-900/40 rounded max-w-6xl">
               <ProjectTasks tasks={tasks} folders={folders} projectId={id} />
             </div>
           )}
-          {activeTab === "folders" && ( // NEW
-            <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
+          {activeTab === "folders" && (
+            <div className="dark:bg-zinc-900/40 rounded max-w-6xl">
               <ProjectFolders folders={folders} projectId={id} />
             </div>
           )}
           {activeTab === "analytics" && (
-            <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
+            <div className="dark:bg-zinc-900/40 rounded max-w-6xl">
               <ProjectAnalytics
                 tasks={tasks}
                 project={project}
@@ -245,19 +286,17 @@ export default function ProjectDetail() {
             </div>
           )}
           {activeTab === "calendar" && (
-            <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
+            <div className="dark:bg-zinc-900/40 rounded max-w-6xl">
               <ProjectCalendar tasks={tasks} folders={folders} />
             </div>
           )}
           {activeTab === "settings" && (
-            <div className=" dark:bg-zinc-900/40 rounded max-w-6xl">
+            <div className="dark:bg-zinc-900/40 rounded max-w-6xl">
               <ProjectSettings project={project} />
             </div>
           )}
         </div>
       </div>
-
-    
 
       {showCreateTask && (
         <CreateTaskDialog
@@ -265,7 +304,6 @@ export default function ProjectDetail() {
           setShowCreateTask={setShowCreateTask}
           projectId={id}
           folders={folders}
-          // 🆕 NEW: Auto-select current folder when creating from folder context
           initialFolderId={searchParams.get("folderId") || null}
         />
       )}

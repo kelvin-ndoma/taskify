@@ -1,11 +1,11 @@
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { deleteTask, updateTask } from "../features/workspaceSlice";
 import { CalendarIcon, Trash, XIcon, Users, Mail, User, Heart, Circle, Square, FolderIcon } from "lucide-react";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import api from "../configs/api";
 
 // 🆕 UPDATED: Type icons with new values
@@ -32,8 +32,14 @@ const getSafeImageUrl = (imageUrl) => {
     return imageUrl;
 };
 
-// 🆕 User avatar component
-const UserAvatar = ({ user, size = 5 }) => {
+// 🆕 FIXED: User avatar component with proper static class names
+const UserAvatar = ({ user, size = "sm" }) => {
+    const sizeClasses = {
+        sm: "w-5 h-5 text-xs",
+        md: "w-6 h-6 text-sm", 
+        lg: "w-8 h-8 text-base"
+    };
+
     const safeImage = getSafeImageUrl(user?.image);
     
     if (safeImage) {
@@ -41,14 +47,14 @@ const UserAvatar = ({ user, size = 5 }) => {
             <img
                 src={safeImage}
                 alt={user?.name || "User"}
-                className={`size-${size} rounded-full bg-gray-200 dark:bg-zinc-800`}
+                className={`${sizeClasses[size]} rounded-full bg-gray-200 dark:bg-zinc-800 object-cover`}
             />
         );
     }
     
     const initials = user?.name?.charAt(0)?.toUpperCase() || "U";
     return (
-        <div className={`size-${size} rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white text-xs font-medium`}>
+        <div className={`${sizeClasses[size]} rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white font-medium`}>
             {initials}
         </div>
     );
@@ -72,6 +78,33 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
         assignee: "",
     });
 
+    // 🆕 DEBUG: Log tasks data to see structure
+    useEffect(() => {
+        console.log('🔍 DEBUG - ProjectTasks Data Analysis:');
+        console.log('Total tasks received:', tasks?.length || 0);
+        console.log('Tasks structure:', tasks);
+        
+        if (tasks && tasks.length > 0) {
+            tasks.forEach((task, index) => {
+                console.log(`Task ${index + 1}:`, {
+                    id: task.id,
+                    title: task.title,
+                    assignees: task.assignees,
+                    assigneesCount: task.assignees?.length || 0,
+                    hasAssignees: !!task.assignees && task.assignees.length > 0,
+                    assigneesStructure: task.assignees?.[0] // Show first assignee structure
+                });
+            });
+
+            // Check if there are tasks with assignees but they're not showing
+            const tasksWithAssignees = tasks.filter(task => 
+                task.assignees && task.assignees.length > 0
+            );
+            console.log('Tasks with assignees:', tasksWithAssignees.length);
+            console.log('Tasks without assignees:', tasks.length - tasksWithAssignees.length);
+        }
+    }, [tasks]);
+
     // 🆕 UPDATED: Get tasks based on whether we're viewing folder or project tasks
     const getTasksToDisplay = () => {
         if (folderId && currentFolder) {
@@ -79,25 +112,35 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
             return currentFolder.tasks || [];
         } else {
             // Show tasks from project root (no folder)
-            return tasks.filter(task => !task.folderId);
+            return tasks?.filter(task => !task.folderId) || [];
         }
     };
 
     const tasksToDisplay = getTasksToDisplay();
 
-    // 🆕 Fix: Get unique assignee names from multiple assignees
+    // 🆕 FIXED: Get unique assignee names from multiple assignees
     const assigneeList = useMemo(() => {
         const allAssignees = tasksToDisplay.flatMap(task => 
-            task.assignees?.map(assignee => assignee.user?.name).filter(Boolean) || []
+            task.assignees?.map(assignee => ({
+                label: assignee.user?.name || "Unknown User",
+                value: assignee.user?.name || "Unknown User"
+            })) || []
         );
-        return Array.from(new Set(allAssignees));
+        
+        // Remove duplicates and filter out undefined
+        const uniqueAssignees = Array.from(new Map(
+            allAssignees.filter(a => a.value && a.value !== "Unknown User").map(item => [item.value, item])
+        ).values());
+        
+        console.log('👥 Assignee list generated:', uniqueAssignees);
+        return uniqueAssignees;
     }, [tasksToDisplay]);
 
     const filteredTasks = useMemo(() => {
         return tasksToDisplay.filter((task) => {
             const { status, type, priority, assignee } = filters;
             
-            // 🆕 Fix: Check if any assignee matches the filter
+            // 🆕 FIX: Check if any assignee matches the filter
             const hasMatchingAssignee = !assignee || 
                 task.assignees?.some(assigneeObj => assigneeObj.user?.name === assignee);
             
@@ -119,7 +162,7 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
         try {
             toast.loading("Updating status...");
 
-            const token = await getToken();
+            const token = getToken();
 
             // Update task status
             await api.put(`/api/tasks/${taskId}`, { status: newStatus }, { 
@@ -143,18 +186,17 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
             const confirm = window.confirm("Are you sure you want to delete the selected tasks?");
             if (!confirm) return;
 
-            const token = await getToken();
+            const token = getToken();
 
             toast.loading("Deleting tasks...");
 
-            // 🛠️ FIX: Use DELETE method for bulk deletion
             await api.delete("/api/tasks", { 
                 data: { tasksIds: selectedTasks },
                 headers: { Authorization: `Bearer ${token}` } 
             });
 
             dispatch(deleteTask(selectedTasks));
-            setSelectedTasks([]); // Clear selection after deletion
+            setSelectedTasks([]);
 
             toast.dismissAll();
             toast.success("Tasks deleted successfully");
@@ -188,19 +230,37 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
         );
     };
 
-    // 🆕 Render assignees for a task
+    // 🆕 FIXED: Robust assignee rendering that handles different data structures
     const renderAssignees = (task) => {
-        if (!task.assignees || task.assignees.length === 0) {
-            return <span className="text-zinc-400 dark:text-zinc-500">-</span>;
+        console.log('🔄 Rendering assignees for task:', task.id, 'assignees:', task.assignees);
+        
+        // Handle different data structures
+        let assignees = task.assignees;
+        
+        // If no assignees or empty array
+        if (!assignees || assignees.length === 0) {
+            console.log('❌ No assignees found for task:', task.id);
+            return (
+                <div className="flex items-center gap-2 text-zinc-400 dark:text-zinc-500">
+                    <Users className="w-4 h-4" />
+                    <span className="text-sm">Unassigned</span>
+                </div>
+            );
         }
 
+        console.log('✅ Assignees to render:', assignees);
+
         // Show first assignee and count for desktop
-        if (task.assignees.length === 1) {
-            const assignee = task.assignees[0];
+        if (assignees.length === 1) {
+            const assignee = assignees[0];
+            const user = assignee.user; // Your API returns { user: { ... } } structure
+            
             return (
                 <div className="flex items-center gap-2">
-                    <UserAvatar user={assignee.user} size={5} />
-                    <span>{assignee.user?.name || "Unknown"}</span>
+                    <UserAvatar user={user} size="sm" />
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                        {user?.name || "Unknown User"}
+                    </span>
                 </div>
             );
         }
@@ -208,36 +268,68 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
         // Show multiple assignees with count
         return (
             <div className="flex items-center gap-2">
-                <div className="flex -space-x-2">
-                    {task.assignees.slice(0, 2).map((assignee, index) => (
-                        <div key={assignee.user?.id || index} className="relative">
-                            <UserAvatar user={assignee.user} size={5} />
-                        </div>
-                    ))}
-                    {task.assignees.length > 2 && (
-                        <div className="size-5 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white text-xs font-medium border-2 border-white dark:border-zinc-800">
-                            +{task.assignees.length - 2}
+                <div className="flex -space-x-1">
+                    {assignees.slice(0, 3).map((assignee, index) => {
+                        const user = assignee.user; // Your API returns { user: { ... } } structure
+                        return (
+                            <div key={user?.id || index} className="relative">
+                                <UserAvatar user={user} size="sm" />
+                            </div>
+                        );
+                    })}
+                    {assignees.length > 3 && (
+                        <div className="w-5 h-5 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white text-xs font-medium border-2 border-white dark:border-zinc-800">
+                            +{assignees.length - 3}
                         </div>
                     )}
                 </div>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {task.assignees.length} assignees
+                    {assignees.length} people
                 </span>
             </div>
         );
     };
 
-    // 🆕 Render mobile assignees view
+    // 🆕 FIXED: Robust mobile assignees view
     const renderMobileAssignees = (task) => {
-        if (!task.assignees || task.assignees.length === 0) {
-            return <span className="text-zinc-400 dark:text-zinc-500">No assignees</span>;
+        let assignees = task.assignees;
+        
+        if (!assignees || assignees.length === 0) {
+            return (
+                <div className="flex items-center gap-2 text-zinc-400 dark:text-zinc-500">
+                    <Users className="w-4 h-4" />
+                    <span className="text-sm">Unassigned</span>
+                </div>
+            );
+        }
+
+        if (assignees.length === 1) {
+            const assignee = assignees[0];
+            const user = assignee.user;
+            return (
+                <div className="flex items-center gap-2">
+                    <UserAvatar user={user} size="sm" />
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                        {user?.name || "Unknown User"}
+                    </span>
+                </div>
+            );
         }
 
         return (
             <div className="flex items-center gap-2">
-                <Users className="size-4 text-zinc-500 dark:text-zinc-400" />
-                <span className="text-sm">
-                    {task.assignees.length} assignee{task.assignees.length !== 1 ? 's' : ''}
+                <div className="flex -space-x-1">
+                    {assignees.slice(0, 2).map((assignee, index) => {
+                        const user = assignee.user;
+                        return (
+                            <div key={user?.id || index} className="relative">
+                                <UserAvatar user={user} size="sm" />
+                            </div>
+                        );
+                    })}
+                </div>
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                    {assignees.length} people
                 </span>
             </div>
         );
@@ -253,6 +345,12 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
         <div>
             {/* 🆕 NEW: Folder Header */}
             {renderFolderHeader()}
+
+            {/* 🆕 DEBUG: Temporary data display - remove after testing */}
+            <div className="mb-4 p-3 bg-yellow-100 dark:bg-yellow-900 rounded text-sm">
+                <strong>Debug Info:</strong> Showing {filteredTasks.length} tasks. 
+                Tasks with assignees: {filteredTasks.filter(t => t.assignees && t.assignees.length > 0).length}
+            </div>
 
             {/* Filters */}
             <div className="flex flex-wrap gap-4 mb-4">
@@ -283,7 +381,7 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
                         ],
                         assignee: [
                             { label: "All Assignees", value: "" },
-                            ...assigneeList.map((n) => ({ label: n, value: n })),
+                            ...assigneeList,
                         ],
                     };
                     return (
@@ -366,15 +464,15 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
                                     <th className="px-4 py-3">Type</th>
                                     <th className="px-4 py-3">Priority</th>
                                     <th className="px-4 py-3">Status</th>
-                                    <th className="px-4 py-3">Assignees</th>
+                                    <th className="px-4 py-3">Assigned To</th>
                                     <th className="px-4 py-3">Due Date</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredTasks.length > 0 ? (
                                     filteredTasks.map((task) => {
-                                        const { icon: Icon, color } = typeIcons[task.type] || {};
-                                        const { background, prioritycolor } = priorityTexts[task.priority] || {};
+                                        const { icon: Icon, color } = typeIcons[task.type] || typeIcons.GENERAL_TASK;
+                                        const { background, prioritycolor } = priorityTexts[task.priority] || priorityTexts.MEDIUM;
 
                                         return (
                                             <tr 
@@ -393,18 +491,20 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
                                                         checked={selectedTasks.includes(task.id)} 
                                                     />
                                                 </td>
-                                                <td className="px-4 pl-0 py-2">{task.title}</td>
+                                                <td className="px-4 pl-0 py-2 font-medium text-zinc-900 dark:text-zinc-100">
+                                                    {task.title}
+                                                </td>
                                                 <td className="px-4 py-2">
                                                     <div className="flex items-center gap-2">
                                                         {Icon && <Icon className={`size-4 ${color}`} />}
                                                         <span className={`uppercase text-xs ${color}`}>
-                                                            {task.type?.replace('_', ' ')}
+                                                            {task.type?.replace(/_/g, ' ') || "GENERAL TASK"}
                                                         </span>
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-2">
                                                     <span className={`text-xs px-2 py-1 rounded ${background} ${prioritycolor}`}>
-                                                        {task.priority}
+                                                        {task.priority || "MEDIUM"}
                                                     </span>
                                                 </td>
                                                 <td onClick={e => e.stopPropagation()} className="px-4 py-2">
@@ -433,7 +533,7 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
                                                 <td className="px-4 py-2">
                                                     <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
                                                         <CalendarIcon className="size-4" />
-                                                        {format(new Date(task.due_date), "dd MMMM")}
+                                                        {task.due_date ? format(new Date(task.due_date), "dd MMMM") : "No due date"}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -456,23 +556,26 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
                     <div className="lg:hidden flex flex-col gap-4 p-4 bg-white dark:bg-zinc-900">
                         {filteredTasks.length > 0 ? (
                             filteredTasks.map((task) => {
-                                const { icon: Icon, color } = typeIcons[task.type] || {};
-                                const { background, prioritycolor } = priorityTexts[task.priority] || {};
+                                const { icon: Icon, color } = typeIcons[task.type] || typeIcons.GENERAL_TASK;
+                                const { background, prioritycolor } = priorityTexts[task.priority] || priorityTexts.MEDIUM;
 
                                 return (
                                     <div 
                                         key={task.id} 
                                         className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg p-4 flex flex-col gap-3"
+                                        onClick={() => navigate(`/taskDetails?projectId=${task.projectId}&taskId=${task.id}`)}
                                     >
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-zinc-900 dark:text-zinc-200 text-sm font-semibold">{task.title}</h3>
                                             <input 
                                                 type="checkbox" 
                                                 className="size-4 accent-zinc-600 dark:accent-zinc-500" 
-                                                onChange={() => selectedTasks.includes(task.id) ? 
-                                                    setSelectedTasks(selectedTasks.filter((i) => i !== task.id)) : 
-                                                    setSelectedTasks((prev) => [...prev, task.id])
-                                                } 
+                                                onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    selectedTasks.includes(task.id) ? 
+                                                        setSelectedTasks(selectedTasks.filter((i) => i !== task.id)) : 
+                                                        setSelectedTasks((prev) => [...prev, task.id])
+                                                }} 
                                                 checked={selectedTasks.includes(task.id)} 
                                             />
                                         </div>
@@ -481,15 +584,15 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
                                             <div className="text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
                                                 {Icon && <Icon className={`size-4 ${color}`} />}
                                                 <span className={`${color} uppercase`}>
-                                                    {task.type?.replace('_', ' ')}
+                                                    {task.type?.replace(/_/g, ' ') || "GENERAL TASK"}
                                                 </span>
                                             </div>
                                             <span className={`text-xs px-2 py-1 rounded ${background} ${prioritycolor}`}>
-                                                {task.priority}
+                                                {task.priority || "MEDIUM"}
                                             </span>
                                         </div>
 
-                                        <div>
+                                        <div onClick={e => e.stopPropagation()}>
                                             <label className="text-zinc-600 dark:text-zinc-400 text-xs">Status</label>
                                             <select 
                                                 name="status" 
@@ -516,7 +619,7 @@ const ProjectTasks = ({ tasks, folders, projectId }) => {
                                             {renderMobileAssignees(task)}
                                             <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
                                                 <CalendarIcon className="size-4" />
-                                                {format(new Date(task.due_date), "dd MMM")}
+                                                {task.due_date ? format(new Date(task.due_date), "dd MMM") : "No date"}
                                             </div>
                                         </div>
                                     </div>

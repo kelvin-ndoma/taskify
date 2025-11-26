@@ -4,11 +4,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../configs/api";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext"; // Replace Clerk import
 import { addProject } from "../features/workspaceSlice";
 
 const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
-    const { getToken } = useAuth();
+    const { getToken } = useAuth(); // Use custom auth
     const dispatch = useDispatch();
     const navigate = useNavigate();
     
@@ -37,7 +37,7 @@ const CreateProjectDialog = ({ isDialogOpen, setIsDialogOpen }) => {
 
             setIsSubmitting(true);
 
-            const token = await getToken();
+            const token = getToken(); // No await needed
             const { data } = await api.post(
                 "/api/projects", 
                 { 

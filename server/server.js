@@ -15,6 +15,7 @@ import teamRouter from './routes/teamRoutes.js';
 
 // Import custom auth middleware
 import { protect } from './middlewares/authMiddleware.js';
+import uploadRouter from './routes/uploadRoutes.js';
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/projects', protect, projectRouter);
 app.use('/api/tasks', protect, taskRouter);
 app.use('/api/comments', protect, commentRouter);
 app.use('/api/team', protect, teamRouter);
+app.use('/api/upload', uploadRouter)
 
 // 404 fallback
 app.use((req, res) => {

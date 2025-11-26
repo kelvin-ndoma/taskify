@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext"; // Replace Clerk import
 import { Plus, Folder, MoreVertical, FileText, Users, Calendar, Edit, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../configs/api";
@@ -9,7 +9,7 @@ import CreateFolderDialog from "./CreateFolderDialog";
 
 export default function ProjectFolders({ folders, projectId }) {
     const dispatch = useDispatch();
-    const { getToken } = useAuth();
+    const { getToken } = useAuth(); // Use custom auth
     const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
     const [editingFolder, setEditingFolder] = useState(null);
 
@@ -20,7 +20,7 @@ export default function ProjectFolders({ folders, projectId }) {
                 return;
             }
 
-            const token = await getToken();
+            const token = getToken(); // No await needed
             const { data } = await api.post(
                 `/api/projects/${projectId}/folders`,
                 folderData,
@@ -39,7 +39,7 @@ export default function ProjectFolders({ folders, projectId }) {
 
     const handleEditFolder = async (folderId, updates) => {
         try {
-            const token = await getToken();
+            const token = getToken(); // No await needed
             const { data } = await api.put(
                 `/api/projects/${projectId}/folders/${folderId}`,
                 updates,
@@ -62,7 +62,7 @@ export default function ProjectFolders({ folders, projectId }) {
         }
 
         try {
-            const token = await getToken();
+            const token = getToken(); // No await needed
             await api.delete(
                 `/api/projects/${projectId}/folders/${folderId}`,
                 { headers: { Authorization: `Bearer ${token}` } }

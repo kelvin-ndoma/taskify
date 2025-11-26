@@ -2,14 +2,14 @@ import { useState } from "react";
 import { Calendar as CalendarIcon, XIcon, Users, LinkIcon, PlusIcon, PaperclipIcon, FolderIcon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { format } from "date-fns";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext"; // Replace Clerk import
 import api from "../configs/api";
 import toast from "react-hot-toast";
 import { addTask } from "../features/workspaceSlice";
 
 export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, projectId, folders = [] }) {
 
-    const { getToken } = useAuth();
+    const { getToken } = useAuth(); // Use custom auth
     const dispatch = useDispatch();
 
     const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace || null);
@@ -165,7 +165,7 @@ export default function CreateTaskDialog({ showCreateTask, setShowCreateTask, pr
         setIsSubmitting(true);
         
         try {
-            const token = await getToken();
+            const token = getToken(); // No await needed
             
             // 🆕 Prepare links data for backend
             const linksData = taskLinks.map(link => ({

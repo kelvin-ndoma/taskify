@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { CheckSquareIcon, ChevronDownIcon, ChevronRightIcon, Users } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { useUser } from '@clerk/clerk-react';
+import { useAuth } from '../context/AuthContext'; // Replace Clerk import
 
 function MyTasksSidebar() {
 
-    const { user } = useUser();
+    const { user } = useAuth(); // Use custom auth
     const { currentWorkspace } = useSelector((state) => state.workspace);
     const [showMyTasks, setShowMyTasks] = useState(false);
     const [myTasks, setMyTasks] = useState([]);

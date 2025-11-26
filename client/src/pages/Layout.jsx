@@ -1,3 +1,4 @@
+// Layout.jsx
 import { useState, useEffect, useCallback } from 'react'
 import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
@@ -6,15 +7,14 @@ import { useDispatch, useSelector } from 'react-redux'
 import { loadTheme } from '../features/themeSlice'
 import { fetchWorkspaces } from '../features/workspaceSlice'
 import { Loader2Icon } from 'lucide-react'
-import { useUser, useAuth, SignIn } from '@clerk/clerk-react'
+import { useAuth } from '../context/AuthContext'
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
     const { loading, initialized, workspaces, currentWorkspace } = useSelector((state) => state.workspace)
     const dispatch = useDispatch()
-    const { user, isLoaded } = useUser()
-    const { getToken } = useAuth()
+    const { user, loading: authLoading, getToken, logout } = useAuth() // Use custom auth
     const navigate = useNavigate()
 
     // Initial load of theme - only once
@@ -25,7 +25,7 @@ const Layout = () => {
     // Load workspaces only once when user is available
     useEffect(() => {
         const loadWorkspaces = async () => {
-            if (user && isLoaded && getToken && !workspacesLoaded) {
+            if (user && !authLoading && getToken && !workspacesLoaded) {
                 try {
                     console.log('🔄 Layout: Dispatching fetchWorkspaces for user:', user.id)
                     await dispatch(fetchWorkspaces({ getToken })).unwrap()
@@ -33,20 +33,24 @@ const Layout = () => {
                     console.log('✅ Workspaces loaded successfully')
                 } catch (error) {
                     console.error('❌ Failed to load workspaces:', error)
+                    // If unauthorized, logout
+                    if (error.response?.status === 401) {
+                        logout()
+                    }
                 }
             }
         }
 
         loadWorkspaces()
-    }, [user, isLoaded, workspacesLoaded, dispatch]) // Remove getToken from dependencies
+    }, [user, authLoading, workspacesLoaded, dispatch, getToken, logout])
 
-    // Redirect to sign-in if user signs out
+    // Redirect to login if not authenticated
     useEffect(() => {
-        if (isLoaded && !user) {
-            console.log('🚪 User signed out, redirecting to sign-in')
-            navigate('/sign-in')
+        if (!authLoading && !user) {
+            console.log('🚪 User not authenticated, redirecting to login')
+            navigate('/login')
         }
-    }, [user, isLoaded, navigate])
+    }, [user, authLoading, navigate])
 
     // Debug log - only log when actually relevant changes happen
     useEffect(() => {
@@ -63,12 +67,27 @@ const Layout = () => {
         if (user) {
             setWorkspacesLoaded(false)
         }
-    }, [user?.id]) // Only reset when user ID changes
+    }, [user?.id])
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <div className='flex items-center justify-center h-screen bg-white dark:bg-zinc-950'>
+                <Loader2Icon className="size-7 text-blue-500 animate-spin" />
+                <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
+                    Loading...
+                </span>
+            </div>
+        )
+    }
 
     if (!user) {
         return (
             <div className='flex justify-center items-center h-screen bg-white dark:bg-zinc-950'>
-                <SignIn />
+                <div className='text-center'>
+                    <Loader2Icon className="size-8 text-blue-500 animate-spin mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400">Redirecting to login...</p>
+                </div>
             </div>
         )
     }

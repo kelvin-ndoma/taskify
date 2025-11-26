@@ -736,10 +736,10 @@ export const getTask = async (req, res) => {
   }
 };
 
-// Get tasks by project - ENHANCED for better display with folder support
+// In your taskController.js - Update the getProjectTasks function
+// In controllers/taskController.js - Update the getProjectTasks function
 export const getProjectTasks = async (req, res) => {
   try {
-    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
     const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
 
@@ -763,7 +763,6 @@ export const getProjectTasks = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    // Check if user has access to this project
     const hasWorkspaceAccess = project.workspace.members.length > 0;
     const hasProjectAccess = project.members.length > 0;
 
@@ -773,6 +772,7 @@ export const getProjectTasks = async (req, res) => {
       });
     }
 
+    // 🆕 FIXED: Enhanced include for assignees with proper user data
     const tasks = await prisma.task.findMany({
       where: { projectId },
       include: {
@@ -784,6 +784,7 @@ export const getProjectTasks = async (req, res) => {
                 name: true,
                 email: true,
                 image: true,
+                role: true,
               },
             },
           },
@@ -802,25 +803,20 @@ export const getProjectTasks = async (req, res) => {
             createdAt: 'asc'
           }
         },
-        folder: { // NEW: Include folder information
+        folder: {
           select: {
             id: true,
             name: true,
             description: true
           }
         },
-        comments: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-              },
-            },
-          },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            workspaceId: true
+          }
         },
-        // FIXED: Include counts for better display
         _count: {
           select: {
             comments: true,
@@ -829,11 +825,19 @@ export const getProjectTasks = async (req, res) => {
         }
       },
       orderBy: [
-        { folderId: 'asc' }, // NEW: Group by folder first
-        { position: 'asc' }, // NEW: Then by position within folder
-        { createdAt: "desc" }, // Fallback to creation date
+        { folderId: 'asc' },
+        { position: 'asc' },
+        { createdAt: "desc" },
       ],
     });
+
+    console.log(`📋 Fetched ${tasks.length} tasks for project ${projectId}`);
+    
+    // Debug log to check data structure
+    if (tasks.length > 0) {
+      console.log('👥 Sample task assignees:', tasks[0].assignees);
+      console.log('🏷️ Sample task type:', tasks[0].type);
+    }
 
     res.json({ tasks });
   } catch (error) {

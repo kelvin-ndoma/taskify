@@ -3,7 +3,7 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import AddProjectMember from "./AddProjectMember";
 import { useDispatch } from "react-redux";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext"; // Replace Clerk import
 import api from "../configs/api";
 import { fetchWorkspaces } from "../features/workspaceSlice";
 import toast from "react-hot-toast";
@@ -11,7 +11,7 @@ import toast from "react-hot-toast";
 export default function ProjectSettings({ project }) {
 
     const dispatch = useDispatch()
-    const { getToken } = useAuth()
+    const { getToken } = useAuth() // Use custom auth
 
     const [formData, setFormData] = useState({
         name: "",
@@ -33,7 +33,7 @@ export default function ProjectSettings({ project }) {
         toast.loading("Saving project...");
         
         try {
-            const token = await getToken();
+            const token = getToken(); // No await needed
             const { data } = await api.put(
                 `/api/projects/${project.id}`, // 🆕 FIXED: Added project ID to URL
                 formData, 
@@ -67,7 +67,7 @@ export default function ProjectSettings({ project }) {
         toast.loading("Deleting project...");
 
         try {
-            const token = await getToken();
+            const token = getToken(); // No await needed
             await api.delete(
                 `/api/projects/${project.id}`,
                 {

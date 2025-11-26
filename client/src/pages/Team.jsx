@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { UsersIcon, Search, UserPlus, Shield, Activity, Trash2, ChevronDown } from "lucide-react";
 import InviteMemberDialog from "../components/InviteMemberDialog";
 import { useSelector } from "react-redux";
-import { useUser, useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext"; // Replace Clerk import
 import api from "../configs/api";
 import toast from "react-hot-toast";
 
@@ -19,8 +19,7 @@ const Team = () => {
     
     const currentWorkspace = useSelector((state) => state?.workspace?.currentWorkspace || null);
     const projects = currentWorkspace?.projects || [];
-    const { user: currentUser } = useUser();
-    const { getToken } = useAuth();
+    const { user: currentUser, getToken } = useAuth(); // Replace Clerk with custom auth
 
     const filteredUsers = users.filter(
         (user) =>
@@ -33,12 +32,12 @@ const Team = () => {
         setTasks(currentWorkspace?.projects?.reduce((acc, project) => [...acc, ...project.tasks], []) || []);
     }, [currentWorkspace]);
 
-    // 🆕 Navigate to member details
+    // Navigate to member details
     const handleMemberClick = (member) => {
         navigate(`/team/${member.user.id}`);
     };
 
-    // 🆕 Check if current user is workspace admin/owner
+    // Check if current user is workspace admin/owner
     const isCurrentUserAdmin = () => {
         if (!currentUser || !currentWorkspace) return false;
         
@@ -52,7 +51,7 @@ const Team = () => {
         );
     };
 
-    // 🆕 Check if user can be removed (can't remove owner, yourself, or if not admin)
+    // Check if user can be removed (can't remove owner, yourself, or if not admin)
     const canRemoveUser = (targetUser) => {
         if (!isCurrentUserAdmin()) return false;
         if (targetUser.user.id === currentUser.id) return false; // Can't remove yourself
@@ -60,7 +59,7 @@ const Team = () => {
         return true;
     };
 
-    // 🆕 Remove team member from workspace
+    // Remove team member from workspace
     const handleRemoveMember = async (member, e) => {
         e?.stopPropagation();
         
@@ -77,7 +76,7 @@ const Team = () => {
         setShowRoleMenu(null);
 
         try {
-            const token = await getToken();
+            const token = getToken(); // No need to await since it's synchronous now
             
             const response = await api.delete(
                 `/api/workspaces/${currentWorkspace.id}/members/${member.user.id}`,
@@ -99,13 +98,13 @@ const Team = () => {
         }
     };
 
-    // 🆕 Update member role
+    // Update member role
     const handleUpdateRole = async (member, newRole) => {
         try {
             setLoadingStates(prev => ({ ...prev, [member.id]: true }));
             setShowRoleMenu(null);
             
-            const token = await getToken();
+            const token = getToken(); // No need to await since it's synchronous now
             
             await api.patch(
                 `/api/workspaces/${currentWorkspace.id}/members/${member.user.id}/role`,
@@ -127,7 +126,7 @@ const Team = () => {
         }
     };
 
-    // 🆕 Safe image URL handler
+    // Safe image URL handler
     const getSafeImageUrl = (imageUrl) => {
         if (!imageUrl || imageUrl.trim() === "" || imageUrl === "null") {
             return null;
@@ -135,7 +134,7 @@ const Team = () => {
         return imageUrl;
     };
 
-    // 🆕 User avatar component with proper sizing
+    // User avatar component with proper sizing
     const UserAvatar = ({ user, size = "md" }) => {
         const safeImage = getSafeImageUrl(user?.image);
         
@@ -169,7 +168,7 @@ const Team = () => {
         );
     };
 
-    // 🆕 Role badge component with role update functionality
+    // Role badge component with role update functionality
     const RoleBadge = ({ member }) => {
         const isOwner = member.user.id === currentWorkspace?.ownerId;
         const isCurrentUserOwner = currentWorkspace?.ownerId === currentUser?.id;

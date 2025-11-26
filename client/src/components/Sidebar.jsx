@@ -4,12 +4,11 @@ import MyTasksSidebar from './MyTasksSidebar'
 import ProjectSidebar from './ProjectsSidebar'
 import WorkspaceDropdown from './WorkspaceDropdown'
 import { FolderOpenIcon, LayoutDashboardIcon, SettingsIcon, UsersIcon, HomeIcon, Loader2Icon } from 'lucide-react'
-import { useClerk, useUser } from '@clerk/clerk-react'
+import { useAuth } from '../context/AuthContext' // Fixed import path (should be contexts, not context)
 import { useSelector } from 'react-redux'
 
 const Sidebar = ({ isSidebarOpen, setIsSidebarOpen }) => {
-    const { openUserProfile } = useClerk()
-    const { user } = useUser()
+    const { user, logout } = useAuth()
     const location = useLocation()
     const { currentWorkspace, loading, initialized } = useSelector(state => state.workspace)
 
@@ -38,6 +37,56 @@ const Sidebar = ({ isSidebarOpen, setIsSidebarOpen }) => {
         }
     }, [location.pathname, setIsSidebarOpen])
 
+    // Handle settings click
+    const handleSettingsClick = () => {
+        console.log('Settings clicked - implement your settings modal here');
+        if (window.innerWidth < 640) {
+            setIsSidebarOpen(false);
+        }
+    }
+
+    // Safe image URL handler
+    const getSafeImageUrl = (imageUrl) => {
+        if (!imageUrl || imageUrl.trim() === "" || imageUrl === "null") {
+            return null;
+        }
+        return imageUrl;
+    };
+
+    // User avatar component
+    const UserAvatar = ({ user, size = "md" }) => {
+        const safeImage = getSafeImageUrl(user?.image);
+        
+        const sizeClasses = {
+            sm: "w-6 h-6 text-xs",
+            md: "w-8 h-8 text-sm",
+            lg: "w-10 h-10 text-base",
+            xl: "w-12 h-12 text-lg"
+        };
+        
+        const sizeClass = sizeClasses[size] || sizeClasses.md;
+        
+        if (safeImage) {
+            return (
+                <img
+                    src={safeImage}
+                    alt={user?.name || "User"}
+                    className={`${sizeClass} rounded-full bg-gray-200 dark:bg-zinc-800 object-cover`}
+                    onError={(e) => {
+                        e.target.style.display = 'none';
+                    }}
+                />
+            );
+        }
+        
+        const initials = user?.name?.charAt(0)?.toUpperCase() || "U";
+        return (
+            <div className={`${sizeClass} rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white font-medium`}>
+                {initials}
+            </div>
+        );
+    };
+
     // 🆕 Show loading state if workspace data isn't ready
     if (loading || !initialized) {
         return (
@@ -64,14 +113,10 @@ const Sidebar = ({ isSidebarOpen, setIsSidebarOpen }) => {
             {/* User Welcome */}
             <div className="p-4 border-b border-gray-200 dark:border-zinc-800">
                 <div className="flex items-center gap-3">
-                    <img 
-                        src={user?.imageUrl} 
-                        alt={user?.fullName}
-                        className="w-8 h-8 rounded-full"
-                    />
+                    <UserAvatar user={user} size="md" />
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {user?.fullName || 'User'}
+                            {user?.name || 'User'}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                             {currentWorkspace?.name || 'Workspace'}
@@ -113,13 +158,18 @@ const Sidebar = ({ isSidebarOpen, setIsSidebarOpen }) => {
             </div>
 
             {/* Footer/Settings */}
-            <div className="p-4 border-t border-gray-200 dark:border-zinc-800">
+            <div className="p-4 border-t border-gray-200 dark:border-zinc-800 space-y-2">
+              
+                
+                {/* Logout button */}
                 <button 
-                    onClick={openUserProfile} 
-                    className='flex w-full items-center gap-3 py-2 px-3 text-gray-700 dark:text-zinc-200 cursor-pointer rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-800/60 transition-all'
+                    onClick={logout} 
+                    className='flex w-full items-center gap-3 py-2 px-3 text-red-600 dark:text-red-400 cursor-pointer rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-all'
                 >
-                    <SettingsIcon size={18} />
-                    <p className='text-sm font-medium'>Settings</p>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <p className='text-sm font-medium'>Logout</p>
                 </button>
             </div>
         </div>

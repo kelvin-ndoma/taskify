@@ -1,12 +1,12 @@
+// TasksSummary.jsx
 import { useEffect, useState } from "react";
 import { ArrowRight, Clock, AlertTriangle, User, Users } from "lucide-react";
 import { useSelector } from "react-redux";
-import { useUser } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext"; // Replace Clerk import
 
 export default function TasksSummary() {
-
     const { currentWorkspace } = useSelector((state) => state.workspace);
-    const { user } = useUser();
+    const { user } = useAuth(); // Use custom auth instead of Clerk
     const [tasks, setTasks] = useState([]);
 
     // Get all tasks for all projects in current workspace
@@ -18,7 +18,7 @@ export default function TasksSummary() {
 
     // 🆕 Fix: Check if user is in assignees array
     const myTasks = tasks.filter(task => 
-        task.assignees?.some(assignee => assignee.user?.id === user.id)
+        task.assignees?.some(assignee => assignee.user?.id === user?.id)
     );
     
     // 🆕 UPDATED: Overdue tasks exclude CANCELLED status

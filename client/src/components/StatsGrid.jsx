@@ -1,13 +1,13 @@
 import { FolderOpen, CheckCircle, Users, AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import { useUser } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext"; // Replace Clerk import
 
 export default function StatsGrid() {
     const currentWorkspace = useSelector(
         (state) => state?.workspace?.currentWorkspace || null
     );
-    const { user } = useUser();
+    const { user } = useAuth(); // Use custom auth
 
     const [stats, setStats] = useState({
         totalProjects: 0,

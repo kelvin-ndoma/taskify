@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, UserPlus, Mail, Shield, Loader2, ExternalLink } from "lucide-react";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext"; // Replace Clerk import
 import { useSelector } from "react-redux";
 import api from "../configs/api";
 import toast from "react-hot-toast";
@@ -14,7 +14,7 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
   const currentWorkspace = useSelector(
     (state) => state?.workspace?.currentWorkspace || null
   );
-  const { getToken } = useAuth();
+  const { getToken } = useAuth(); // Use custom auth
 
   const handleDialogToggle = (open) => {
     setIsDialogOpen(open);
@@ -25,85 +25,84 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
     }
   };
 
- // In InviteMemberDialog.js - update handleSubmit
-const handleSubmit = async (e) => {
-  e.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-  console.log('🔍 INVITE_DEBUG - Current Workspace:', {
-    id: currentWorkspace?.id,
-    name: currentWorkspace?.name,
-  });
+    console.log('🔍 INVITE_DEBUG - Current Workspace:', {
+      id: currentWorkspace?.id,
+      name: currentWorkspace?.name,
+    });
 
-  if (!email.trim()) {
-    toast.error("Please enter an email address");
-    return;
-  }
-  if (!isValidEmail(email)) {
-    toast.error("Please enter a valid email address");
-    return;
-  }
-  if (!currentWorkspace?.id) {
-    toast.error("No workspace selected");
-    return;
-  }
-  
-  setIsLoading(true);
+    if (!email.trim()) {
+      toast.error("Please enter an email address");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    if (!currentWorkspace?.id) {
+      toast.error("No workspace selected");
+      return;
+    }
+    
+    setIsLoading(true);
 
-  try {
-    const token = await getToken();
+    try {
+      const token = getToken(); // No await needed
 
-    const response = await api.post(
-      `/api/workspaces/${currentWorkspace.id}/members`,
-      {
-        email: email.trim(),
-        role,
-        workspaceId: currentWorkspace.id,
-        message: message.trim() || `You've been invited to join ${currentWorkspace.name}`,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+      const response = await api.post(
+        `/api/workspaces/${currentWorkspace.id}/members`,
+        {
+          email: email.trim(),
+          role,
+          workspaceId: currentWorkspace.id,
+          message: message.trim() || `You've been invited to join ${currentWorkspace.name}`,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          }
         }
-      }
-    );
+      );
 
-    if (response.data) {
-      // ✅ Handle both cases: existing user OR new user invitation
-      if (response.data.requiresSignup) {
-        toast.success(`Invitation sent to ${email}! They will need to sign up first.`);
+      if (response.data) {
+        // ✅ Handle both cases: existing user OR new user invitation
+        if (response.data.requiresSignup) {
+          toast.success(`Invitation sent to ${email}! They will need to sign up first.`);
+        } else {
+          toast.success(`Member ${response.data.member?.user?.name || email} added successfully!`);
+        }
+        handleDialogToggle(false);
+      }
+    } catch (error) {
+      console.error("Error inviting member:", error);
+
+      const errorMessage = error.response?.data?.message || error.message || "Failed to send invitation";
+
+      // ✅ Simplified error handling
+      if (error.response?.status === 400) {
+        if (errorMessage.includes("already been sent") || errorMessage.includes("already a member")) {
+          toast.error("An invitation has already been sent to this email address");
+        } else if (errorMessage.includes("Invalid role")) {
+          toast.error("Please select a valid role");
+        } else if (errorMessage.includes("member limit")) {
+          toast.error("Workspace member limit reached");
+        } else {
+          toast.error("Invalid invitation data. Please check the email and try again.");
+        }
+      } else if (error.response?.status === 403) {
+        toast.error("You don't have permission to invite members to this workspace");
+      } else if (error.response?.status === 404) {
+        toast.error("Workspace not found. Please refresh and try again.");
       } else {
-        toast.success(`Member ${response.data.member?.user?.name || email} added successfully!`);
+        toast.error(errorMessage);
       }
-      handleDialogToggle(false);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error("Error inviting member:", error);
-
-    const errorMessage = error.response?.data?.message || error.message || "Failed to send invitation";
-
-    // ✅ Simplified error handling
-    if (error.response?.status === 400) {
-      if (errorMessage.includes("already been sent") || errorMessage.includes("already a member")) {
-        toast.error("An invitation has already been sent to this email address");
-      } else if (errorMessage.includes("Invalid role")) {
-        toast.error("Please select a valid role");
-      } else if (errorMessage.includes("member limit")) {
-        toast.error("Workspace member limit reached");
-      } else {
-        toast.error("Invalid invitation data. Please check the email and try again.");
-      }
-    } else if (error.response?.status === 403) {
-      toast.error("You don't have permission to invite members to this workspace");
-    } else if (error.response?.status === 404) {
-      toast.error("Workspace not found. Please refresh and try again.");
-    } else {
-      toast.error(errorMessage);
-    }
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   const isValidEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -230,7 +229,7 @@ const handleSubmit = async (e) => {
             />
           </div>
 
-          {/* Information Box */}
+          {/* Information Box - Updated for custom auth */}
           <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <ExternalLink className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
@@ -239,7 +238,7 @@ const handleSubmit = async (e) => {
                   How invitations work
                 </h4>
                 <ul className="text-xs text-blue-700 dark:text-blue-400 space-y-1">
-                  <li>• User receives an email invitation from Clerk</li>
+                  <li>• User receives an email invitation</li>
                   <li>• They must sign up/login to accept the invitation</li>
                   <li>• After accepting, they'll be automatically added to the workspace</li>
                   <li>• They'll also be added to "The Burns Brothers" workspace</li>
