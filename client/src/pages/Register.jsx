@@ -1,8 +1,8 @@
-// pages/Register.jsx - Updated with debug logs
+// pages/Register.jsx - Updated with better password visibility
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
-import { useAuth } from '../context/AuthContext'; // ← FIXED IMPORT PATH
+import { Eye, EyeOff, Mail, Lock, User, Check, X } from 'lucide-react'; // Added icons
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const Register = () => {
@@ -15,6 +15,7 @@ const Register = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState(0);
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -23,13 +24,28 @@ const Register = () => {
   const emailFromInvite = searchParams.get('email');
   const workspaceId = searchParams.get('workspaceId');
 
-  console.log('📝 Register component loaded', { emailFromInvite, workspaceId });
+  // Password strength checker
+  const checkPasswordStrength = (password) => {
+    let strength = 0;
+    if (password.length >= 6) strength += 1;
+    if (password.length >= 8) strength += 1;
+    if (/[A-Z]/.test(password)) strength += 1;
+    if (/[0-9]/.test(password)) strength += 1;
+    if (/[^A-Za-z0-9]/.test(password)) strength += 1;
+    return strength;
+  };
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [name]: value
     }));
+
+    // Update password strength when password changes
+    if (name === 'password') {
+      setPasswordStrength(checkPasswordStrength(value));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -86,6 +102,14 @@ const Register = () => {
       setFormData(prev => ({ ...prev, email: emailFromInvite }));
     }
   }, [emailFromInvite]);
+
+  const passwordRequirements = [
+    { text: 'At least 6 characters', met: formData.password.length >= 6 },
+    { text: 'At least 8 characters', met: formData.password.length >= 8 },
+    { text: 'Contains uppercase letter', met: /[A-Z]/.test(formData.password) },
+    { text: 'Contains number', met: /[0-9]/.test(formData.password) },
+    { text: 'Contains special character', met: /[^A-Za-z0-9]/.test(formData.password) },
+  ];
 
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -193,16 +217,51 @@ const Register = () => {
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400" />
+                    <EyeOff className="h-5 w-5" />
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400" />
+                    <Eye className="h-5 w-5" />
                   )}
                 </button>
               </div>
+              
+              {/* Password Strength Indicator */}
+              {formData.password && (
+                <div className="mt-2">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          passwordStrength <= 1 ? 'bg-red-500' :
+                          passwordStrength <= 3 ? 'bg-yellow-500' : 'bg-green-500'
+                        }`}
+                        style={{ width: `${(passwordStrength / 5) * 100}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {passwordStrength <= 1 ? 'Weak' : passwordStrength <= 3 ? 'Medium' : 'Strong'}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    {passwordRequirements.map((req, index) => (
+                      <div key={index} className="flex items-center text-xs">
+                        {req.met ? (
+                          <Check className="h-3 w-3 text-green-500 mr-2" />
+                        ) : (
+                          <X className="h-3 w-3 text-gray-400 mr-2" />
+                        )}
+                        <span className={req.met ? 'text-green-600' : 'text-gray-500'}>
+                          {req.text}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -226,16 +285,19 @@ const Register = () => {
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
                   {showConfirmPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400" />
+                    <EyeOff className="h-5 w-5" />
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400" />
+                    <Eye className="h-5 w-5" />
                   )}
                 </button>
               </div>
+              {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                <p className="mt-1 text-xs text-red-600">Passwords do not match</p>
+              )}
             </div>
           </div>
 

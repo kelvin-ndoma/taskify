@@ -12,15 +12,27 @@ const ForgotPassword = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!email || !email.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await api.post('/auth/forgot-password', { email });
+      console.log('📧 Sending password reset email to:', email);
+      
+      // FIXED: Use correct endpoint path
+      await api.post('/api/auth/forgot-password', { email });
+      
       setEmailSent(true);
       toast.success('Password reset email sent! Check your inbox.');
     } catch (error) {
-      // Don't show specific error for security
+      console.error('❌ Forgot password error:', error);
+      // Don't show specific error for security, but show success anyway
       setEmailSent(true);
+      toast.success('If an account with that email exists, a password reset link has been sent.');
     } finally {
       setLoading(false);
     }
@@ -40,6 +52,9 @@ const ForgotPassword = () => {
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               If an account with <strong>{email}</strong> exists, we've sent a password reset link.
             </p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+              The link will expire in 1 hour.
+            </p>
           </div>
           <div className="space-y-4">
             <Link
@@ -49,7 +64,10 @@ const ForgotPassword = () => {
               Back to login
             </Link>
             <button
-              onClick={() => setEmailSent(false)}
+              onClick={() => {
+                setEmailSent(false);
+                setEmail('');
+              }}
               className="w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-zinc-700 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-zinc-900 hover:bg-gray-50 dark:hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
               Try another email
@@ -104,7 +122,14 @@ const ForgotPassword = () => {
               disabled={loading}
               className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Sending...' : 'Send reset link'}
+              {loading ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Sending...
+                </div>
+              ) : (
+                'Send reset link'
+              )}
             </button>
 
             <Link
