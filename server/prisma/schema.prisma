@@ -34,6 +34,7 @@ model User {
   taskLinks       TaskLink[]
   ownedWorkspaces Workspace[]
   workspaces      WorkspaceMember[]
+  sentInvitations Invitation[]      // 🆕 ADDED: Fixes the relation error
 }
 
 // 🆕 ADDED: Global user roles for workspace creation permissions
@@ -56,6 +57,7 @@ model Workspace {
   projects    Project[]
   owner       User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   members     WorkspaceMember[]
+  invitations Invitation[]      // 🆕 ADDED: Relation to workspace invitations
 }
 
 model WorkspaceMember {
@@ -88,7 +90,6 @@ model Invitation {
   @@index([email])
   @@index([status])
 }
-
 
 model Project {
   id          String          @id @default(uuid())
