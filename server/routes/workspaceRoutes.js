@@ -1,6 +1,7 @@
 // src/routes/workspaceRoutes.js
 import express from 'express';
 import { 
+  createWorkspace,
   getUserWorkspaces, 
   addMember, 
   removeMember,
@@ -8,10 +9,21 @@ import {
   updateWorkspace,
   getWorkspaceById,
   updateMemberRole,
-  ensureDefaultWorkspace
+  ensureDefaultWorkspace,
+  getWorkspaceLimits, // 🆕 NEW
+  createWorkspaceForUser // 🆕 NEW
 } from '../controllers/workspaceController.js';
 
 const workspaceRouter = express.Router();
+
+// 🆕 CREATE WORKSPACE - Regular users and admins
+workspaceRouter.post('/', createWorkspace);
+
+// 🆕 NEW: Get workspace creation limits
+workspaceRouter.get('/limits', getWorkspaceLimits);
+
+// 🆕 NEW: Admin endpoint to create workspace for other users
+workspaceRouter.post('/admin/create-for-user', createWorkspaceForUser);
 
 // Get all workspaces for current user
 workspaceRouter.get('/', getUserWorkspaces);

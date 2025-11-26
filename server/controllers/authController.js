@@ -14,6 +14,7 @@ import {
   sendPasswordResetEmail, 
   sendWelcomeEmail 
 } from '../services/emailService.js';
+import { processPendingInvitations } from '../controllers/workspaceController.js'; // 🆕 ADDED IMPORT
 
 // User registration
 export const register = async (req, res) => {
@@ -157,6 +158,9 @@ export const verifyEmail = async (req, res) => {
     });
 
     console.log(`✅ Email verified for: ${user.email}`);
+
+    // 🆕 CRITICAL: Process any pending workspace invitations for this user
+    await processPendingInvitations(user.id, user.email);
 
     // Trigger Inngest event for workspace setup
     await inngest.send({

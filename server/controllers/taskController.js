@@ -1,11 +1,29 @@
 // controllers/taskController.js
 import prisma from "../configs/prisma.js";
 import { inngest } from "../inngest/index.js";
+import { verifyToken } from "../utils/auth.js";
+
+// Helper function to get user from token (same as other controllers)
+const getUserIdFromToken = (req) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      throw new Error('No token provided');
+    }
+    
+    const decoded = verifyToken(token);
+    return decoded.userId;
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    throw new Error('Invalid token');
+  }
+};
 
 // Create task
 export const createTask = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const origin = req.get("origin");
 
     const {
@@ -280,7 +298,8 @@ export const createTask = async (req, res) => {
 // Update task
 export const updateTask = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const origin = req.get("origin");
     const { id: taskId } = req.params;
 
@@ -593,14 +612,15 @@ export const updateTask = async (req, res) => {
     res.json({ task: updatedTask, message: "Task updated successfully." });
   } catch (error) {
     console.error("❌ Error updating task:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to update task" });
   }
 };
 
 // Get task by ID - ENHANCED for better display with folder support
 export const getTask = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { id: taskId } = req.params;
 
     const task = await prisma.task.findUnique({
@@ -712,14 +732,15 @@ export const getTask = async (req, res) => {
     res.json({ task });
   } catch (error) {
     console.error("❌ Error fetching task:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to fetch task" });
   }
 };
 
 // Get tasks by project - ENHANCED for better display with folder support
 export const getProjectTasks = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
 
     const project = await prisma.project.findUnique({
@@ -817,14 +838,15 @@ export const getProjectTasks = async (req, res) => {
     res.json({ tasks });
   } catch (error) {
     console.error("❌ Error fetching project tasks:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to fetch project tasks" });
   }
 };
 
 // NEW: Get tasks by folder
 export const getFolderTasks = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { folderId } = req.params;
 
     const folder = await prisma.folder.findUnique({
@@ -924,14 +946,15 @@ export const getFolderTasks = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error fetching folder tasks:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to fetch folder tasks" });
   }
 };
 
 // Delete single task by ID
 export const deleteTask = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { id: taskId } = req.params;
 
     const task = await prisma.task.findUnique({
@@ -977,14 +1000,15 @@ export const deleteTask = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error deleting task:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to delete task" });
   }
 };
 
 // Delete multiple tasks (bulk deletion)
 export const deleteTasks = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { tasksIds } = req.body;
 
     if (!tasksIds || !Array.isArray(tasksIds) || tasksIds.length === 0) {
@@ -1049,6 +1073,6 @@ export const deleteTasks = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error deleting tasks:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to delete tasks" });
   }
 };

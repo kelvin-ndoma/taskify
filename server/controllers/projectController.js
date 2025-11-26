@@ -1,5 +1,21 @@
-// src/controllers/projectController.js
 import prisma from "../configs/prisma.js";
+import { verifyToken } from "../utils/auth.js";
+
+// Helper function to get user from token (same as workspace controller)
+const getUserIdFromToken = (req) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      throw new Error('No token provided');
+    }
+    
+    const decoded = verifyToken(token);
+    return decoded.userId;
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    throw new Error('Invalid token');
+  }
+};
 
 // Helper function to check workspace admin/owner access
 const hasWorkspaceAdminAccess = (workspace, userId) => {
@@ -13,7 +29,8 @@ const hasWorkspaceAdminAccess = (workspace, userId) => {
 // Get all projects for current workspace
 export const getProjects = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { workspaceId } = req.query;
 
     if (!workspaceId) {
@@ -120,14 +137,15 @@ export const getProjects = async (req, res) => {
     res.json({ projects });
   } catch (error) {
     console.error("Get projects error:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to fetch projects" });
   }
 };
 
 // Create project
 export const createProject = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Replace req.auth() with getUserIdFromToken
+    const userId = getUserIdFromToken(req);
     const {
       workspaceId,
       description,
@@ -140,6 +158,12 @@ export const createProject = async (req, res) => {
       progress = 0,
       priority = "MEDIUM",
     } = req.body;
+
+    console.log('🔄 Create project request:', { 
+      name, 
+      workspaceId, 
+      userId 
+    });
 
     if (!workspaceId || !name) {
       return res.status(400).json({ 
@@ -336,20 +360,32 @@ export const createProject = async (req, res) => {
       },
     });
 
+    console.log(`✅ Project created successfully: ${project.name} in workspace ${workspace.name}`);
+
     res.json({
       project: projectWithDetails,
       message: "Project created successfully.",
     });
   } catch (error) {
     console.error("Create project error:", error);
-    res.status(500).json({ message: error.code || error.message });
+    
+    if (error.code === 'P2002') {
+      return res.status(400).json({ 
+        message: "A project with this name already exists in the workspace." 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: error.message || "Failed to create project" 
+    });
   }
 };
 
 // Get project by ID
 export const getProject = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Replace req.auth() with getUserIdFromToken
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
 
     const project = await prisma.project.findUnique({
@@ -478,8 +514,20 @@ export const getProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
+    // 🆕 FIX: Need to include workspace members in the query to check access
+    const workspaceWithMembers = await prisma.workspace.findUnique({
+      where: { id: project.workspaceId },
+      include: {
+        members: {
+          select: {
+            userId: true
+          }
+        }
+      }
+    });
+
     const hasAccess = project.members.some(member => member.userId === userId) ||
-                     project.workspace.members.some(member => member.userId === userId);
+                     workspaceWithMembers?.members.some(member => member.userId === userId);
 
     if (!hasAccess) {
       return res.status(403).json({ 
@@ -490,14 +538,15 @@ export const getProject = async (req, res) => {
     res.json({ project });
   } catch (error) {
     console.error("Get project error:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to fetch project" });
   }
 };
 
 // Update project
 export const updateProject = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
     const {
       description,
@@ -648,14 +697,15 @@ export const updateProject = async (req, res) => {
     });
   } catch (error) {
     console.error("Update project error:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to update project" });
   }
 };
 
 // Delete project
 export const deleteProject = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
 
     if (!projectId) {
@@ -697,14 +747,15 @@ export const deleteProject = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete project error:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to delete project" });
   }
 };
 
 // Create folder in project
 export const createFolder = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
     const {
       name,
@@ -840,7 +891,8 @@ export const createFolder = async (req, res) => {
 // Get all folders for a project
 export const getProjectFolders = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
 
     if (!projectId) {
@@ -938,7 +990,8 @@ export const getProjectFolders = async (req, res) => {
 // Update folder in project
 export const updateFolder = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId, folderId } = req.params;
     const {
       name,
@@ -1088,7 +1141,8 @@ export const updateFolder = async (req, res) => {
 // Delete folder from project
 export const deleteFolder = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId, folderId } = req.params;
 
     if (!folderId) {
@@ -1185,7 +1239,8 @@ export const deleteFolder = async (req, res) => {
 // Reorder folders in project
 export const reorderFolders = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
     const { folderOrders } = req.body; // Array of { folderId, position }
 
@@ -1266,11 +1321,11 @@ export const reorderFolders = async (req, res) => {
   }
 };
 
-// ... (keep all the existing member management functions: addProjectMember, removeProjectMember, getProjectStats, updateProjectProgress)
 // Add member to project
 export const addProjectMember = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
     const { email } = req.body;
 
@@ -1358,14 +1413,24 @@ export const addProjectMember = async (req, res) => {
     });
   } catch (error) {
     console.error("Add project member error:", error);
-    res.status(500).json({ message: error.code || error.message });
+    
+    if (error.code === 'P2002') {
+      return res.status(400).json({ 
+        message: "User is already a member of this project." 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: error.message || "Failed to add member to project" 
+    });
   }
 };
 
 // Remove member from project
 export const removeProjectMember = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId, memberId } = req.params;
 
     if (!projectId || !memberId) {
@@ -1440,14 +1505,24 @@ export const removeProjectMember = async (req, res) => {
     });
   } catch (error) {
     console.error("Remove project member error:", error);
-    res.status(500).json({ message: error.code || error.message });
+    
+    if (error.code === "P2025") {
+      return res.status(404).json({
+        message: "Member not found in project",
+      });
+    }
+    
+    res.status(500).json({ 
+      message: error.message || "Failed to remove member from project" 
+    });
   }
 };
 
 // Get project statistics
 export const getProjectStats = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
 
     const project = await prisma.project.findUnique({
@@ -1516,14 +1591,15 @@ export const getProjectStats = async (req, res) => {
     res.json({ stats });
   } catch (error) {
     console.error("Get project stats error:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to get project statistics" });
   }
 };
 
 // Update project progress
 export const updateProjectProgress = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
     const { progress } = req.body;
 
@@ -1627,6 +1703,6 @@ export const updateProjectProgress = async (req, res) => {
     });
   } catch (error) {
     console.error("Update project progress error:", error);
-    res.status(500).json({ message: error.code || error.message });
+    res.status(500).json({ message: error.message || "Failed to update project progress" });
   }
 };

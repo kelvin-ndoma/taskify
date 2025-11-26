@@ -1,10 +1,28 @@
 // controllers/teamController.js
 import prisma from "../configs/prisma.js";
+import { verifyToken } from "../utils/auth.js";
+
+// Helper function to get user from token (same as other controllers)
+const getUserIdFromToken = (req) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      throw new Error('No token provided');
+    }
+    
+    const decoded = verifyToken(token);
+    return decoded.userId;
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    throw new Error('Invalid token');
+  }
+};
 
 // Get all tasks assigned to a specific team member in a workspace
 export const getMemberTasks = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { workspaceId, memberId } = req.params;
 
     console.log("📥 Fetching tasks for member:", { workspaceId, memberId, requestedBy: userId });
@@ -148,7 +166,8 @@ export const getMemberTasks = async (req, res) => {
 // Get team member statistics
 export const getMemberStats = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { workspaceId, memberId } = req.params;
 
     // Verify workspace access
@@ -248,7 +267,8 @@ export const getMemberStats = async (req, res) => {
 // Get all team members with their task counts
 export const getWorkspaceTeamMembers = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { workspaceId } = req.params;
 
     // Verify workspace access

@@ -1,11 +1,29 @@
 // controllers/commentController.js
 import prisma from "../configs/prisma.js";
 import { inngest } from "../inngest/index.js";
+import { verifyToken } from "../utils/auth.js";
+
+// Helper function to get user from token (same as other controllers)
+const getUserIdFromToken = (req) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      throw new Error('No token provided');
+    }
+    
+    const decoded = verifyToken(token);
+    return decoded.userId;
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    throw new Error('Invalid token');
+  }
+};
 
 // Add comment
 export const addComment = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const origin = req.get("origin");
     const { content, taskId, links = [] } = req.body;
 
@@ -190,7 +208,8 @@ export const addComment = async (req, res) => {
 // Update comment
 export const updateComment = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { commentId } = req.params;
     const { content, links } = req.body;
 
@@ -370,7 +389,8 @@ export const updateComment = async (req, res) => {
 // Get comments for a specific task
 export const getTaskComments = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { taskId } = req.params;
 
     console.log("📥 Fetching comments for task:", taskId);
@@ -447,14 +467,15 @@ export const getTaskComments = async (req, res) => {
     res.json({ comments });
   } catch (error) {
     console.error("💥 Get comments error:", error);
-    res.status(500).json({ message: error.message || "Internal server error" });
+    res.status(500).json({ message: error.message || "Failed to fetch task comments" });
   }
 };
 
 // Get comment by ID
 export const getComment = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { commentId } = req.params;
 
     if (!commentId) {
@@ -516,14 +537,15 @@ export const getComment = async (req, res) => {
     res.json({ comment });
   } catch (error) {
     console.error("Get comment error:", error);
-    res.status(500).json({ message: error.message || "Internal server error" });
+    res.status(500).json({ message: error.message || "Failed to fetch comment" });
   }
 };
 
 // Get all comments for a project
 export const getProjectComments = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { projectId } = req.params;
 
     if (!projectId) {
@@ -597,14 +619,15 @@ export const getProjectComments = async (req, res) => {
     res.json({ comments });
   } catch (error) {
     console.error("Get project comments error:", error);
-    res.status(500).json({ message: error.message || "Internal server error" });
+    res.status(500).json({ message: error.message || "Failed to fetch project comments" });
   }
 };
 
 // Delete comment
 export const deleteComment = async (req, res) => {
   try {
-    const { userId } = await req.auth();
+    // 🆕 FIX: Use getUserIdFromToken instead of req.auth()
+    const userId = getUserIdFromToken(req);
     const { commentId } = req.params;
 
     if (!commentId) {
@@ -660,6 +683,6 @@ export const deleteComment = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete comment error:", error);
-    res.status(500).json({ message: error.message || "Internal server error" });
+    res.status(500).json({ message: error.message || "Failed to delete comment" });
   }
 };

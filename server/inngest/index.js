@@ -242,6 +242,71 @@ const processWorkspaceInvitation = inngest.createFunction(
   }
 );
 
+// 🆕 NEW: Send workspace welcome email
+const sendWorkspaceWelcomeEmail = inngest.createFunction(
+  { id: "send-workspace-welcome-email" },
+  { event: "app/workspace.welcome" },
+  async ({ event }) => {
+    const { workspaceId, userId, workspaceName, inviterName } = event.data;
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true }
+      });
+
+      if (!user) {
+        console.error(`❌ User ${userId} not found`);
+        return;
+      }
+
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId }
+      });
+
+      if (!workspace) {
+        console.error(`❌ Workspace ${workspaceId} not found`);
+        return;
+      }
+
+      await sendEmail({
+        to: user.email,
+        subject: `Welcome to ${workspaceName}!`,
+        body: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #333; margin-bottom: 10px;">Welcome to ${workspaceName}! 🎉</h1>
+          </div>
+
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 25px;">
+            <h2 style="color: #007bff; margin: 0 0 15px 0;">Hi ${user.name},</h2>
+            <p style="color: #555; margin: 0 0 15px 0; line-height: 1.5;">
+              You've been successfully added to <strong>${workspaceName}</strong> by ${inviterName}.
+            </p>
+            
+            <div style="text-align: center; margin: 25px 0;">
+              <a href="${process.env.APP_URL || 'http://localhost:3000'}/workspaces/${workspaceId}" 
+                style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                Go to Workspace
+              </a>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid #e0e0e0; padding-top: 20px; text-align: center;">
+            <p style="color: #999; font-size: 12px; margin: 0;">
+              You can now collaborate with your team members on projects and tasks.
+            </p>
+          </div>
+        </div>`
+      });
+
+      console.log(`✅ Workspace welcome email sent to: ${user.email}`);
+    } catch (error) {
+      console.error("❌ Error sending workspace welcome email:", error);
+    }
+  }
+);
+
 /* =========================================================
    🔹 EMAIL NOTIFICATION FUNCTIONS (UNCHANGED - STILL WORK)
 ========================================================= */
@@ -541,6 +606,7 @@ export const functions = [
   syncUserCreation,                    // User registration
   sendWorkspaceInvitationEmail,        // Invite team members
   processWorkspaceInvitation,          // Accept invitations
+  sendWorkspaceWelcomeEmail,           // 🆕 NEW: Welcome to workspace emails
   
   // Email notification functions (unchanged)
   sendTaskAssignmentEmail,

@@ -10,19 +10,20 @@ datasource db {
 }
 
 model User {
-  id              String            @id @default(uuid())  // Changed to auto-generate UUID
+  id              String            @id @default(uuid())
   name            String
   email           String            @unique
   image           String            @default("")
+  role            UserRole          @default(MEMBER) // 🆕 ADDED: Global user role
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   
-  // 🔐 NEW: Authentication fields
-  passwordHash    String?           // Hashed password for local auth
+  // 🔐 Authentication fields
+  passwordHash    String?
   emailVerified   Boolean           @default(false)
-  verificationToken String?         // For email verification
-  resetToken      String?           // For password reset
-  resetTokenExpiry DateTime?        // Token expiration
+  verificationToken String?
+  resetToken      String?
+  resetTokenExpiry DateTime?
   
   // Existing relations
   comments        Comment[]
@@ -35,9 +36,15 @@ model User {
   workspaces      WorkspaceMember[]
 }
 
-// All other models remain EXACTLY the same
+// 🆕 ADDED: Global user roles for workspace creation permissions
+enum UserRole {
+  SUPER_ADMIN  // Can create workspaces for other users
+  ADMIN        // Can create unlimited workspaces  
+  MEMBER       // Limited to 3 workspaces (default)
+}
+
 model Workspace {
-  id          String            @id @default(uuid())  // Changed to auto-generate
+  id          String            @id @default(uuid())
   name        String
   slug        String            @unique
   description String?
@@ -62,6 +69,26 @@ model WorkspaceMember {
 
   @@unique([userId, workspaceId])
 }
+
+model Invitation {
+  id          String            @id @default(uuid())
+  email       String
+  workspaceId String
+  role        WorkspaceRole     @default(MEMBER)
+  invitedById String
+  status      InvitationStatus  @default(PENDING)
+  message     String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([email, workspaceId])
+  @@index([email])
+  @@index([status])
+}
+
 
 model Project {
   id          String          @id @default(uuid())
@@ -181,10 +208,17 @@ model CommentLink {
   @@index([userId])
 }
 
-// All enums remain exactly the same
+// Workspace-level roles (for permissions within a workspace)
 enum WorkspaceRole {
   ADMIN
   MEMBER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
 }
 
 enum TaskStatus {
